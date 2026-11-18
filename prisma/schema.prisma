@@ -1,0 +1,55 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  passwordHash String
+  role         String   @default("USER") // "ADMIN" or "USER"
+  createdAt    DateTime @default(now())
+  notes        Note[]
+}
+
+model Video {
+  id          String     @id @default(cuid())
+  title       String
+  description String?
+  videoUrl    String
+  r2Key       String
+  status      String     @default("PROCESSING") // "PROCESSING", "READY", "FAILED"
+  createdAt   DateTime   @default(now())
+  subtitles   Subtitle[]
+  notes       Note[]
+}
+
+model Subtitle {
+  id        String  @id @default(cuid())
+  videoId   String
+  video     Video   @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  index     Int
+  startTime Float
+  endTime   Float
+  speaker   String?
+  text      String
+  ipa       String
+
+  @@index([videoId, index])
+}
+
+model Note {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  videoId   String
+  video     Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  content   String   @default("")
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, videoId])
+}
