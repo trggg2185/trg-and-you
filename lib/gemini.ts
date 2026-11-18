@@ -66,12 +66,17 @@ const subtitleResponseSchema = {
   required: ["subtitles"],
 };
 
+function normalizeEnvKey(raw: string | undefined): string {
+  if (!raw) return "";
+  return raw.trim().replace(/^["']|["']$/g, "").trim();
+}
+
 function getGeminiApiKeys(): string[] {
   const keys: string[] = [];
 
   if (process.env.GEMINI_API_KEYS) {
     for (const part of process.env.GEMINI_API_KEYS.split(",")) {
-      const k = part.trim();
+      const k = normalizeEnvKey(part);
       if (k) keys.push(k);
     }
   }
@@ -81,18 +86,25 @@ function getGeminiApiKeys(): string[] {
     "GEMINI_API_KEY_2",
     "GEMINI_API_KEY_3",
   ]) {
-    const val = process.env[envName]?.trim();
+    const val = normalizeEnvKey(process.env[envName]);
     if (val) keys.push(val);
   }
 
   return Array.from(new Set(keys));
 }
 
+const GEMINI_MODELS = [
+  "gemini-3.8-flash",
+  "gemini-3.5-flash-lite",
+  "gemini-3.1-flash-lite",
+  "gemini-3.7-flash",
+] as const;
+
 function createGeminiClient(apiKey: string): GoogleGenAI {
   return new GoogleGenAI({
     apiKey,
     httpOptions: {
-      timeout: 65000,
+      timeout: 20000,
       // Disable SDK's hidden 5x retry storm; we handle key rotation & fast fallback explicitly
       retryOptions: {
         attempts: 1,
@@ -183,15 +195,19 @@ function isLikelyDuplicate(a: GeneratedSubtitle, b: GeneratedSubtitle): boolean 
 async function generateForAudioPart(
   ai: GoogleGenAI,
   audioPart: ReturnType<typeof createPartFromUri> | { inlineData: { data: string; mimeType: string } },
-  prompt: string
-) {
-  const models = ["gemini-3.8-flash", "gemini-3.7-flash"] as const;
+  prompt: string,
+  keyLabel: string,
+  startModelIdx: number
+): Promise<{
+  response: Awaited<ReturnType<GoogleGenAI["models"]["generateContent"]>>;
+  usedModelIdx: number;
+}> {
   let lastError: unknown;
 
-  for (let i = 0; i < models.length; i++) {
-    const model = models[i];
+  for (let i = startModelIdx; i < GEMINI_MODELS.length; i++) {
+    const model = GEMINI_MODELS[i];
     try {
-      return await ai.models.generateContent({
+      const response = await ai.models.generateContent({
         model,
         contents: [audioPart, prompt],
         config: {
@@ -200,16 +216,20 @@ async function generateForAudioPart(
           responseSchema: subtitleResponseSchema,
         },
       });
+      return { response, usedModelIdx: i };
     } catch (err) {
       lastError = err;
+      const status = (err as { status?: number })?.status ?? "ERR";
+      console.warn(`[Gemini ${keyLabel}] model=${model} failed (${status})`);
+
       if (isRateLimitError(err)) {
         // Bubble 429 immediately so caller can rotate to next API key or fail fast
         throw err;
       }
-      if (!isTransientServerError(err) || i === models.length - 1) {
+      if (!isTransientServerError(err) || i === GEMINI_MODELS.length - 1) {
         throw err;
       }
-      await new Promise((r) => setTimeout(r, 1200));
+      await new Promise((r) => setTimeout(r, 500));
     }
   }
 
@@ -218,9 +238,11 @@ async function generateForAudioPart(
 
 async function transcribeChunkWithKey(
   apiKey: string,
+  keyLabel: string,
   chunk: AudioChunk,
-  inlineBase64: string | null
-): Promise<GeneratedSubtitle[]> {
+  inlineBase64: string | null,
+  startModelIdx: number
+): Promise<{ subtitles: GeneratedSubtitle[]; usedModelIdx: number }> {
   const ai = createGeminiClient(apiKey);
   let uploadedFileName: string | undefined;
 
@@ -282,12 +304,20 @@ Strict rules:
 6. Provide full-sentence IPA ("ipa") enclosed in slashes (/.../) reflecting natural connected speech, weak forms, and linking.
 7. Do NOT include any Vietnamese translation.`;
 
-    const response = await generateForAudioPart(ai, audioPart, prompt);
+    const { response, usedModelIdx } = await generateForAudioPart(
+      ai,
+      audioPart,
+      prompt,
+      keyLabel,
+      startModelIdx
+    );
     const rawText = response.text;
-    if (!rawText) return [];
+    if (!rawText) return { subtitles: [], usedModelIdx };
 
     const parsed = JSON.parse(rawText) as { subtitles?: RawGeminiSubtitle[] };
-    if (!Array.isArray(parsed.subtitles)) return [];
+    if (!Array.isArray(parsed.subtitles)) {
+      return { subtitles: [], usedModelIdx };
+    }
 
     const results: GeneratedSubtitle[] = [];
     for (const item of parsed.subtitles) {
@@ -314,7 +344,7 @@ Strict rules:
       });
     }
 
-    return results;
+    return { subtitles: results, usedModelIdx };
   } finally {
     if (uploadedFileName) {
       await ai.files.delete({ name: uploadedFileName }).catch(() => {});
@@ -342,6 +372,7 @@ export async function transcribeAudioWithGemini(
   try {
     const allSubtitles: GeneratedSubtitle[] = [];
     let activeKeyIdx = 0;
+    let activeModelIdx = 0;
 
     for (const chunk of chunks) {
       const stat = await fs.stat(chunk.filePath);
@@ -353,17 +384,28 @@ export async function transcribeAudioWithGemini(
       let subs: GeneratedSubtitle[] | null = null;
       let lastError: unknown;
 
-      // Try from activeKeyIdx onward; rotate if a key hits 429 rate limit
+      // Try from activeKeyIdx onward; rotate if a key hits 429 rate limit or transient overload
       for (let k = activeKeyIdx; k < apiKeys.length; k++) {
         try {
-          subs = await transcribeChunkWithKey(apiKeys[k], chunk, inlineBase64);
+          const res = await transcribeChunkWithKey(
+            apiKeys[k],
+            `key#${k + 1}`,
+            chunk,
+            inlineBase64,
+            k === activeKeyIdx ? activeModelIdx : 0
+          );
+          subs = res.subtitles;
           activeKeyIdx = k;
+          activeModelIdx = res.usedModelIdx;
           break;
         } catch (err) {
           lastError = err;
-          if (isRateLimitError(err) && k < apiKeys.length - 1) {
+          if (
+            (isRateLimitError(err) || isTransientServerError(err)) &&
+            k < apiKeys.length - 1
+          ) {
             console.warn(
-              `Gemini key #${k + 1} reached rate limit, rotating to key #${k + 2}...`
+              `Gemini key#${k + 1} failed (${(err as { status?: number })?.status ?? "ERR"}), rotating to key#${k + 2}...`
             );
             continue;
           }
