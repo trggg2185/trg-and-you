@@ -21,6 +21,8 @@ interface RawGeminiSubtitle {
   ipa: string;
 }
 
+const MAX_INLINE_AUDIO_BYTES = 10 * 1024 * 1024; // 10 MB
+
 const subtitleResponseSchema = {
   type: Type.OBJECT,
   properties: {
@@ -48,7 +50,8 @@ const subtitleResponseSchema = {
           },
           text: {
             type: Type.STRING,
-            description: "Exact verbatim English transcription of what is spoken.",
+            description:
+              "Exact verbatim English transcription of what is spoken.",
           },
           ipa: {
             type: Type.STRING,
@@ -63,6 +66,41 @@ const subtitleResponseSchema = {
   required: ["subtitles"],
 };
 
+function getGeminiApiKeys(): string[] {
+  const keys: string[] = [];
+
+  if (process.env.GEMINI_API_KEYS) {
+    for (const part of process.env.GEMINI_API_KEYS.split(",")) {
+      const k = part.trim();
+      if (k) keys.push(k);
+    }
+  }
+
+  for (const envName of [
+    "GEMINI_API_KEY",
+    "GEMINI_API_KEY_2",
+    "GEMINI_API_KEY_3",
+  ]) {
+    const val = process.env[envName]?.trim();
+    if (val) keys.push(val);
+  }
+
+  return Array.from(new Set(keys));
+}
+
+function createGeminiClient(apiKey: string): GoogleGenAI {
+  return new GoogleGenAI({
+    apiKey,
+    httpOptions: {
+      timeout: 65000,
+      // Disable SDK's hidden 5x retry storm; we handle key rotation & fast fallback explicitly
+      retryOptions: {
+        attempts: 1,
+      },
+    },
+  });
+}
+
 function formatMmSs(totalSeconds: number): string {
   const safe = Math.max(0, totalSeconds);
   const mins = Math.floor(safe / 60);
@@ -70,9 +108,6 @@ function formatMmSs(totalSeconds: number): string {
   return `${String(mins).padStart(2, "0")}:${secs.toFixed(1).padStart(4, "0")}`;
 }
 
-/**
- * Parses timestamps like "01:12.4", "00:05", "1:02:03.5", or raw numeric "12.4".
- */
 function parseTimestampToSeconds(value: string): number | null {
   const cleaned = value
     .trim()
@@ -104,55 +139,20 @@ function parseTimestampToSeconds(value: string): number | null {
   return null;
 }
 
-const GEMINI_MODELS = [
-  "gemini-3.8-flash",
-  "gemini-3.7-flash",
-  "gemini-3.6-flash",
-] as const;
-
-function isTransientGeminiError(err: unknown): boolean {
+function isRateLimitError(err: unknown): boolean {
   const status = (err as { status?: number })?.status;
-  if (status === 429 || status === 500 || status === 502 || status === 503 || status === 504) {
+  if (status === 429) return true;
+  const msg = err instanceof Error ? err.message : String(err);
+  return /429|RESOURCE_EXHAUSTED|quota|rate limit/i.test(msg);
+}
+
+function isTransientServerError(err: unknown): boolean {
+  const status = (err as { status?: number })?.status;
+  if (status === 500 || status === 502 || status === 503 || status === 504) {
     return true;
   }
   const msg = err instanceof Error ? err.message : String(err);
-  return /503|429|UNAVAILABLE|RESOURCE_EXHAUSTED|high demand|fetch failed/i.test(
-    msg
-  );
-}
-
-async function generateWithRetryAndFallback(
-  ai: GoogleGenAI,
-  fileUri: string,
-  mimeType: string,
-  prompt: string
-) {
-  let lastError: unknown;
-
-  for (const model of GEMINI_MODELS) {
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try {
-        return await ai.models.generateContent({
-          model,
-          contents: [createPartFromUri(fileUri, mimeType), prompt],
-          config: {
-            temperature: 0,
-            responseMimeType: "application/json",
-            responseSchema: subtitleResponseSchema,
-          },
-        });
-      } catch (err) {
-        lastError = err;
-        if (!isTransientGeminiError(err)) {
-          throw err;
-        }
-        const delayMs = 1500 * (attempt + 1);
-        await new Promise((r) => setTimeout(r, delayMs));
-      }
-    }
-  }
-
-  throw lastError;
+  return /503|UNAVAILABLE|high demand|fetch failed|timeout/i.test(msg);
 }
 
 function normalizeWords(text: string): string[] {
@@ -164,7 +164,6 @@ function normalizeWords(text: string): string[] {
 }
 
 function isLikelyDuplicate(a: GeneratedSubtitle, b: GeneratedSubtitle): boolean {
-  // Only consider duplicates if they overlap or start within 1.5s of each other
   if (Math.abs(a.startTime - b.startTime) > 1.8 && b.startTime > a.endTime + 0.5) {
     return false;
   }
@@ -181,31 +180,89 @@ function isLikelyDuplicate(a: GeneratedSubtitle, b: GeneratedSubtitle): boolean 
   return ratio >= 0.7;
 }
 
-async function transcribeChunk(
+async function generateForAudioPart(
   ai: GoogleGenAI,
-  chunk: AudioChunk
+  audioPart: ReturnType<typeof createPartFromUri> | { inlineData: { data: string; mimeType: string } },
+  prompt: string
+) {
+  const models = ["gemini-3.8-flash", "gemini-3.7-flash"] as const;
+  let lastError: unknown;
+
+  for (let i = 0; i < models.length; i++) {
+    const model = models[i];
+    try {
+      return await ai.models.generateContent({
+        model,
+        contents: [audioPart, prompt],
+        config: {
+          temperature: 0,
+          responseMimeType: "application/json",
+          responseSchema: subtitleResponseSchema,
+        },
+      });
+    } catch (err) {
+      lastError = err;
+      if (isRateLimitError(err)) {
+        // Bubble 429 immediately so caller can rotate to next API key or fail fast
+        throw err;
+      }
+      if (!isTransientServerError(err) || i === models.length - 1) {
+        throw err;
+      }
+      await new Promise((r) => setTimeout(r, 1200));
+    }
+  }
+
+  throw lastError;
+}
+
+async function transcribeChunkWithKey(
+  apiKey: string,
+  chunk: AudioChunk,
+  inlineBase64: string | null
 ): Promise<GeneratedSubtitle[]> {
-  const uploadedFile = await ai.files.upload({
-    file: chunk.filePath,
-    config: { mimeType: "audio/mpeg" },
-  });
+  const ai = createGeminiClient(apiKey);
+  let uploadedFileName: string | undefined;
 
   try {
-    let fileState = uploadedFile.state;
-    let fileUri = uploadedFile.uri;
-    const fileName = uploadedFile.name;
+    let audioPart:
+      | ReturnType<typeof createPartFromUri>
+      | { inlineData: { data: string; mimeType: string } };
 
-    let attempts = 0;
-    while (fileState === "PROCESSING" && fileName && attempts < 20) {
-      await new Promise((r) => setTimeout(r, 1500));
-      const check = await ai.files.get({ name: fileName });
-      fileState = check.state;
-      fileUri = check.uri;
-      attempts++;
-    }
+    if (inlineBase64) {
+      audioPart = {
+        inlineData: {
+          data: inlineBase64,
+          mimeType: "audio/mpeg",
+        },
+      };
+    } else {
+      const uploadedFile = await ai.files.upload({
+        file: chunk.filePath,
+        config: { mimeType: "audio/mpeg" },
+      });
+      uploadedFileName = uploadedFile.name;
 
-    if (!fileUri) {
-      throw new Error("Gemini uploaded file URI is missing");
+      let fileState = uploadedFile.state;
+      let fileUri = uploadedFile.uri;
+
+      let attempts = 0;
+      while (fileState === "PROCESSING" && uploadedFileName && attempts < 15) {
+        await new Promise((r) => setTimeout(r, 1500));
+        const check = await ai.files.get({ name: uploadedFileName });
+        fileState = check.state;
+        fileUri = check.uri;
+        attempts++;
+      }
+
+      if (!fileUri) {
+        throw new Error("Gemini uploaded file URI is missing");
+      }
+
+      audioPart = createPartFromUri(
+        fileUri,
+        uploadedFile.mimeType ?? "audio/mpeg"
+      );
     }
 
     const clipEndStr = formatMmSs(chunk.durationSec);
@@ -225,22 +282,12 @@ Strict rules:
 6. Provide full-sentence IPA ("ipa") enclosed in slashes (/.../) reflecting natural connected speech, weak forms, and linking.
 7. Do NOT include any Vietnamese translation.`;
 
-    const response = await generateWithRetryAndFallback(
-      ai,
-      fileUri,
-      uploadedFile.mimeType ?? "audio/mpeg",
-      prompt
-    );
-
+    const response = await generateForAudioPart(ai, audioPart, prompt);
     const rawText = response.text;
-    if (!rawText) {
-      return [];
-    }
+    if (!rawText) return [];
 
     const parsed = JSON.parse(rawText) as { subtitles?: RawGeminiSubtitle[] };
-    if (!Array.isArray(parsed.subtitles)) {
-      return [];
-    }
+    if (!Array.isArray(parsed.subtitles)) return [];
 
     const results: GeneratedSubtitle[] = [];
     for (const item of parsed.subtitles) {
@@ -269,8 +316,8 @@ Strict rules:
 
     return results;
   } finally {
-    if (uploadedFile.name) {
-      await ai.files.delete({ name: uploadedFile.name }).catch(() => {});
+    if (uploadedFileName) {
+      await ai.files.delete({ name: uploadedFileName }).catch(() => {});
     }
   }
 }
@@ -278,12 +325,11 @@ Strict rules:
 export async function transcribeAudioWithGemini(
   mp3Path: string
 ): Promise<GeneratedSubtitle[]> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
+  const apiKeys = getGeminiApiKeys();
+  if (apiKeys.length === 0) {
     throw new Error("GEMINI_API_KEY environment variable is not set");
   }
 
-  const ai = new GoogleGenAI({ apiKey });
   const tempDir = os.tmpdir();
   const prefix = `sub-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
@@ -295,21 +341,49 @@ export async function transcribeAudioWithGemini(
 
   try {
     const allSubtitles: GeneratedSubtitle[] = [];
+    let activeKeyIdx = 0;
 
-    // Process chunks sequentially to avoid spiking concurrent demand / rate limits
     for (const chunk of chunks) {
-      const subs = await transcribeChunk(ai, chunk);
+      const stat = await fs.stat(chunk.filePath);
+      const inlineBase64 =
+        stat.size <= MAX_INLINE_AUDIO_BYTES
+          ? (await fs.readFile(chunk.filePath)).toString("base64")
+          : null;
+
+      let subs: GeneratedSubtitle[] | null = null;
+      let lastError: unknown;
+
+      // Try from activeKeyIdx onward; rotate if a key hits 429 rate limit
+      for (let k = activeKeyIdx; k < apiKeys.length; k++) {
+        try {
+          subs = await transcribeChunkWithKey(apiKeys[k], chunk, inlineBase64);
+          activeKeyIdx = k;
+          break;
+        } catch (err) {
+          lastError = err;
+          if (isRateLimitError(err) && k < apiKeys.length - 1) {
+            console.warn(
+              `Gemini key #${k + 1} reached rate limit, rotating to key #${k + 2}...`
+            );
+            continue;
+          }
+          throw err;
+        }
+      }
+
+      if (!subs) {
+        throw lastError ?? new Error("All Gemini API keys failed");
+      }
+
       allSubtitles.push(...subs);
     }
 
-    // Sort chronologically and clean boundary overlaps/duplicates
     allSubtitles.sort((a, b) => a.startTime - b.startTime);
 
     const cleaned: GeneratedSubtitle[] = [];
     for (const sub of allSubtitles) {
       const prev = cleaned[cleaned.length - 1];
       if (prev && isLikelyDuplicate(prev, sub)) {
-        // Keep the more complete line
         if (sub.text.length > prev.text.length) {
           cleaned[cleaned.length - 1] = {
             ...sub,

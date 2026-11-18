@@ -140,8 +140,8 @@ function cutSingleChunk(
 }
 
 /**
- * Splits long audio (> 75s) into ~60-75s chunks anchored on natural silences
- * when available so Gemini keeps accurate timing without drift or skipped lines.
+ * Splits long audio (> 180s) into ~150s chunks anchored on natural silences
+ * when available so Gemini keeps accurate timing while minimizing API requests.
  */
 export async function splitAudioIntoChunks(
   mp3Path: string,
@@ -151,14 +151,14 @@ export async function splitAudioIntoChunks(
   const { totalDurationSec, silenceMidpoints } =
     await analyzeAudioForChunking(mp3Path);
 
-  if (totalDurationSec <= 75) {
+  if (totalDurationSec <= 180) {
     return {
       totalDurationSec,
       chunks: [
         {
           filePath: mp3Path,
           startSec: 0,
-          durationSec: totalDurationSec || 75,
+          durationSec: totalDurationSec || 180,
           isTemporaryChunk: false,
         },
       ],
@@ -170,14 +170,14 @@ export async function splitAudioIntoChunks(
 
   while (cursor < totalDurationSec) {
     const remaining = totalDurationSec - cursor;
-    if (remaining <= 80) {
+    if (remaining <= 180) {
       ranges.push({ startSec: cursor, endSec: totalDurationSec });
       break;
     }
 
-    const idealEnd = cursor + 65;
-    const windowMin = cursor + 45;
-    const windowMax = Math.min(totalDurationSec - 10, cursor + 82);
+    const idealEnd = cursor + 150;
+    const windowMin = cursor + 115;
+    const windowMax = Math.min(totalDurationSec - 15, cursor + 175);
 
     // Find silence midpoint closest to idealEnd inside [windowMin, windowMax]
     let bestSilence: number | null = null;
