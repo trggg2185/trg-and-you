@@ -23,7 +23,18 @@ function isAdminOnlyPath(pathname: string, method: string): boolean {
   if (pathname.startsWith("/admin")) return true;
   if (pathname.startsWith("/api/upload")) return true;
   if (pathname.startsWith("/api/videos/process")) return true;
-  if (pathname.startsWith("/api/videos/") && method === "DELETE") return true;
+  if (pathname.startsWith("/api/videos/") && pathname.endsWith("/reprocess")) {
+    return true;
+  }
+  if (pathname.startsWith("/api/videos/") && pathname.endsWith("/subtitles")) {
+    return true;
+  }
+  if (
+    pathname.startsWith("/api/videos/") &&
+    (method === "DELETE" || method === "PATCH" || method === "PUT")
+  ) {
+    return true;
+  }
   return false;
 }
 

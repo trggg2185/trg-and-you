@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { AlertTriangle, HelpCircle, Loader2, X } from "lucide-react";
 
 interface ConfirmModalProps {
@@ -26,6 +27,12 @@ export default function ConfirmModal({
   onConfirm,
   onCancel,
 }: ConfirmModalProps) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   useEffect(() => {
     if (!open) return;
     function handleEsc(e: KeyboardEvent) {
@@ -37,26 +44,26 @@ export default function ConfirmModal({
     return () => window.removeEventListener("keydown", handleEsc);
   }, [open, loading, onCancel]);
 
-  if (!open) return null;
+  if (!open || !mounted) return null;
 
   const isDanger = variant === "danger";
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
     >
-      {/* Backdrop */}
+      {/* Clean dark overlay (no blur) */}
       <div
         onClick={() => {
           if (!loading) onCancel();
         }}
-        className="animate-modal-backdrop fixed inset-0 bg-slate-900/40 backdrop-blur-[2px]"
+        className="animate-modal-backdrop fixed inset-0 bg-slate-900/50"
       />
 
       {/* Panel */}
-      <div className="animate-modal-panel relative z-10 w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl shadow-slate-900/15">
+      <div className="animate-modal-panel relative z-10 w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl shadow-slate-900/20">
         <button
           type="button"
           disabled={loading}
@@ -114,6 +121,7 @@ export default function ConfirmModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

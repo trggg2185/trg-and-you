@@ -321,7 +321,7 @@ export default function ShadowingStudio({
                 setAutoplayBlocked(false);
                 void videoRef.current?.play().catch(() => {});
               }}
-              className="absolute inset-0 flex items-center justify-center bg-slate-950/45 backdrop-blur-[1px] transition hover:bg-slate-950/35 cursor-pointer"
+              className="absolute inset-0 flex items-center justify-center bg-slate-950/45 transition hover:bg-slate-950/35 cursor-pointer"
             >
               <span className="inline-flex items-center gap-2 rounded-full bg-teal-700 px-5 py-2.5 text-sm font-semibold text-white shadow-lg transition hover:bg-teal-800">
                 <Play className="h-4 w-4 fill-current" />

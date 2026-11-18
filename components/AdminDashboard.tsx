@@ -11,6 +11,7 @@ import {
   ExternalLink,
   FileVideo,
   Film,
+  Languages,
   Loader2,
   Sparkles,
   Trash2,
@@ -475,6 +476,14 @@ export default function AdminDashboard({ initialVideos }: AdminDashboardProps) {
                               <span>Mở</span>
                             </Link>
                           )}
+                          <Link
+                            href={`/admin/videos/${video.id}`}
+                            title="Chỉnh sửa phụ đề và phiên âm IPA"
+                            className="inline-flex items-center gap-1 rounded-xl border border-teal-200 bg-teal-50/80 px-3 py-1.5 text-xs font-semibold text-teal-800 transition hover:bg-teal-100"
+                          >
+                            <Languages className="h-3.5 w-3.5" />
+                            <span>Sub & IPA</span>
+                          </Link>
                           <button
                             type="button"
                             onClick={() => startEdit(video)}
