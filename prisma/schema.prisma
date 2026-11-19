@@ -8,37 +8,53 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  username     String   @unique
-  passwordHash String
-  role         String   @default("USER") // "ADMIN" or "USER"
-  isBanned     Boolean  @default(false)
-  createdAt    DateTime @default(now())
-  notes        Note[]
+  id             String             @id @default(cuid())
+  username       String             @unique
+  passwordHash   String?
+  googleId       String?            @unique
+  email          String?            @unique
+  avatarUrl      String?
+  role           String             @default("USER") // "ADMIN" or "USER"
+  isBanned       Boolean            @default(false)
+  createdAt      DateTime           @default(now())
+  notes          Note[]
+  savedSentences SavedSentence[]
+  progresses     LearningProgress[]
+  vocabItems     VocabItem[]
+  studyLogs      StudyLog[]
+  sharedNotes    SharedNote[]
 }
 
 model Video {
-  id          String     @id @default(cuid())
-  title       String
-  description String?
-  videoUrl    String
-  r2Key       String
-  status      String     @default("PROCESSING") // "PROCESSING", "READY", "FAILED"
-  createdAt   DateTime   @default(now())
-  subtitles   Subtitle[]
-  notes       Note[]
+  id           String             @id @default(cuid())
+  title        String
+  description  String?
+  videoUrl     String
+  r2Key        String
+  thumbnailUrl String?
+  thumbnailKey String?
+  level        String?
+  tags         String             @default("")
+  status       String             @default("PROCESSING") // "PROCESSING", "READY", "FAILED"
+  createdAt    DateTime           @default(now())
+  subtitles    Subtitle[]
+  notes        Note[]
+  progresses   LearningProgress[]
+  vocabItems   VocabItem[]
+  sharedNotes  SharedNote[]
 }
 
 model Subtitle {
-  id        String  @id @default(cuid())
+  id        String          @id @default(cuid())
   videoId   String
-  video     Video   @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  video     Video           @relation(fields: [videoId], references: [id], onDelete: Cascade)
   index     Int
   startTime Float
   endTime   Float
   speaker   String?
   text      String
   ipa       String
+  savedBy   SavedSentence[]
 
   @@index([videoId, index])
 }
@@ -53,4 +69,85 @@ model Note {
   updatedAt DateTime @updatedAt
 
   @@unique([userId, videoId])
+}
+
+model SavedSentence {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subtitleId String
+  subtitle   Subtitle @relation(fields: [subtitleId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, subtitleId])
+  @@index([userId, createdAt])
+}
+
+model LearningProgress {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  videoId   String
+  video     Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  lastTime  Float    @default(0)
+  duration  Float    @default(0)
+  completed Boolean  @default(false)
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, videoId])
+}
+
+model VocabItem {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  word         String
+  phonetic     String   @default("")
+  partOfSpeech String   @default("")
+  meaningVi    String   @default("")
+  exampleText  String   @default("")
+  videoId      String?
+  video        Video?   @relation(fields: [videoId], references: [id], onDelete: SetNull)
+  startTime    Float?
+  srsLevel     Int      @default(0)
+  nextReviewAt DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([userId, word])
+  @@index([userId, nextReviewAt])
+}
+
+model StudyLog {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dateKey          String
+  secondsStudied   Int      @default(0)
+  dictationCorrect Int      @default(0)
+  updatedAt        DateTime @updatedAt
+
+  @@unique([userId, dateKey])
+  @@index([userId, dateKey])
+}
+
+model SharedNote {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  videoId      String
+  video        Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  timestampSec Float?
+  content      String
+  createdAt    DateTime @default(now())
+
+  @@index([videoId, createdAt])
+}
+
+model WordEntry {
+  word         String   @id
+  phonetic     String   @default("")
+  partOfSpeech String   @default("")
+  meaningVi    String   @default("")
+  updatedAt    DateTime @updatedAt
 }

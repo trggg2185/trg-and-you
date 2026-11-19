@@ -15,8 +15,26 @@ export async function PUT(request: NextRequest) {
 
     if (!videoId) {
       return NextResponse.json(
-        { error: "Thiếu videoId." },
+        { error: "Thiếu thông tin bài học." },
         { status: 400 }
+      );
+    }
+
+    if (content.length > 20000) {
+      return NextResponse.json(
+        { error: "Nội dung ghi chú quá dài (tối đa 20.000 ký tự)." },
+        { status: 400 }
+      );
+    }
+
+    const videoExists = await prisma.video.findUnique({
+      where: { id: videoId },
+      select: { id: true },
+    });
+    if (!videoExists) {
+      return NextResponse.json(
+        { error: "Không tìm thấy bài học." },
+        { status: 404 }
       );
     }
 

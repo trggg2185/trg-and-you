@@ -3,10 +3,12 @@
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  AlertTriangle,
   BadgeCheck,
-  KeyRound,
+  CheckCircle2,
+  Link2,
   Loader2,
-  LockKeyhole,
+  Mail,
   Save,
   Shield,
   UserCog,
@@ -16,6 +18,10 @@ import ConfirmModal from "@/components/ConfirmModal";
 
 interface AccountSettingsProps {
   initialUsername: string;
+  email?: string | null;
+  avatarUrl?: string | null;
+  hasGoogle: boolean;
+  hasPassword: boolean;
   role: "ADMIN" | "USER";
   createdAt: string;
   noteCount: number;
@@ -23,6 +29,10 @@ interface AccountSettingsProps {
 
 export default function AccountSettings({
   initialUsername,
+  email = null,
+  avatarUrl = null,
+  hasGoogle,
+  hasPassword,
   role,
   createdAt,
   noteCount,
@@ -32,30 +42,16 @@ export default function AccountSettings({
 
   const [username, setUsername] = useState(initialUsername);
   const [savedUsername, setSavedUsername] = useState(initialUsername);
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-
   const [saving, setSaving] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   function handlePreSubmit(e: FormEvent) {
     e.preventDefault();
-
     const trimmedUser = username.trim();
-    const hasUserChange = trimmedUser !== savedUsername;
-    const hasPasswordChange = newPassword.length > 0;
-
-    if (!hasUserChange && !hasPasswordChange) {
-      toast.info("Bạn chưa thay đổi thông tin nào.");
+    if (trimmedUser === savedUsername) {
+      toast.info("Bạn chưa thay đổi tên hiển thị nào.");
       return;
     }
-
-    if (hasPasswordChange && newPassword !== confirmPassword) {
-      toast.error("Mật khẩu mới và xác nhận mật khẩu không khớp.");
-      return;
-    }
-
     setConfirmOpen(true);
   }
 
@@ -67,8 +63,6 @@ export default function AccountSettings({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           username: username.trim(),
-          currentPassword,
-          newPassword,
         }),
       });
 
@@ -80,11 +74,8 @@ export default function AccountSettings({
 
       setSavedUsername(data.user.username);
       setUsername(data.user.username);
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
       setConfirmOpen(false);
-      toast.success("Thông tin tài khoản của bạn đã được lưu.");
+      toast.success("Tên hiển thị của bạn đã được cập nhật.");
       router.refresh();
     } catch {
       toast.error("Không thể kết nối máy chủ. Vui lòng thử lại sau.");
@@ -99,11 +90,20 @@ export default function AccountSettings({
       <div className="lg:col-span-4">
         <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-xs">
           <div className="flex items-center gap-3.5">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-teal-50 text-teal-700">
-              <UserCog className="h-6 w-6" />
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-slate-900">
+            {avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={avatarUrl}
+                alt={savedUsername}
+                className="h-12 w-12 rounded-2xl border border-slate-200 object-cover"
+              />
+            ) : (
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-teal-50 text-teal-700">
+                <UserCog className="h-6 w-6" />
+              </div>
+            )}
+            <div className="min-w-0">
+              <h2 className="truncate text-base font-bold text-slate-900">
                 {savedUsername}
               </h2>
               <span className="mt-0.5 inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700">
@@ -114,6 +114,17 @@ export default function AccountSettings({
           </div>
 
           <div className="mt-6 space-y-3 border-t border-slate-100 pt-4 text-sm">
+            {email && (
+              <div className="flex items-center justify-between gap-2 text-slate-600">
+                <span className="inline-flex items-center gap-1.5 shrink-0">
+                  <Mail className="h-3.5 w-3.5 text-slate-400" />
+                  <span>Google</span>
+                </span>
+                <span className="truncate font-medium text-slate-900">
+                  {email}
+                </span>
+              </div>
+            )}
             <div className="flex items-center justify-between text-slate-600">
               <span>Ngày tham gia</span>
               <span className="font-medium text-slate-900">
@@ -130,17 +141,64 @@ export default function AccountSettings({
         </div>
       </div>
 
-      {/* Edit Form */}
-      <div className="lg:col-span-8">
+      {/* Right Column: Google Link Status + Username Settings */}
+      <div className="space-y-6 lg:col-span-8">
+        {/* Google Auth Link Banner */}
+        {!hasGoogle ? (
+          <div className="rounded-2xl border border-amber-300 bg-amber-50/80 p-5 shadow-xs">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
+                  <AlertTriangle className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-amber-950">
+                    Liên kết với tài khoản Google để gỡ bỏ mật khẩu cũ
+                  </h3>
+                  <p className="mt-1 text-xs leading-relaxed text-amber-900">
+                    Tài khoản này vẫn đang gắn mật khẩu cũ. Hãy liên kết với
+                    Google để đăng nhập nhanh một chạm và tự động xóa mật khẩu cũ
+                    khỏi hệ thống (vẫn giữ nguyên toàn bộ ghi chú, câu đã lưu, từ vựng).
+                  </p>
+                </div>
+              </div>
+
+              <a
+                href="/api/auth/google?mode=link&returnTo=/account"
+                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-teal-700 px-4 py-2.5 text-xs font-semibold text-white shadow-xs transition hover:bg-teal-800"
+              >
+                <Link2 className="h-4 w-4" />
+                <span>Liên kết Google ngay</span>
+              </a>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/70 px-5 py-4">
+            <div className="flex items-center gap-3">
+              <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" />
+              <div>
+                <p className="text-sm font-semibold text-emerald-950">
+                  Đã liên kết tài khoản Google{email ? ` (${email})` : ""}
+                </p>
+                <p className="text-xs text-emerald-800">
+                  {hasPassword
+                    ? "Đang hoàn tất đồng bộ bảo mật."
+                    : "Đăng nhập hoàn toàn qua Google — mật khẩu cũ đã được loại bỏ."}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-xs">
           <div className="mb-6 flex items-center gap-2.5">
             <BadgeCheck className="h-5 w-5 text-teal-700" />
             <div>
               <h2 className="text-base font-semibold text-slate-900">
-                Cập nhật hồ sơ & Bảo mật
+                Thông tin hiển thị
               </h2>
               <p className="text-xs text-slate-500">
-                Đổi tên hiển thị hoặc thay đổi mật khẩu đăng nhập của bạn
+                Đổi tên hiển thị của bạn trên ghi chú nhóm và bảng điều khiển
               </p>
             </div>
           </div>
@@ -148,7 +206,7 @@ export default function AccountSettings({
           <form onSubmit={handlePreSubmit} className="space-y-5">
             <div>
               <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                Tên đăng nhập
+                Tên hiển thị
               </label>
               <input
                 type="text"
@@ -164,72 +222,23 @@ export default function AccountSettings({
               </p>
             </div>
 
-            <div className="border-t border-slate-100 pt-5">
-              <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-800">
-                <LockKeyhole className="h-4 w-4 text-teal-700" />
-                <span>Đổi mật khẩu (bỏ trống nếu không thay đổi)</span>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="sm:col-span-2">
-                  <label className="mb-1.5 block text-xs font-medium text-slate-600">
-                    Mật khẩu hiện tại
-                  </label>
-                  <div className="relative">
-                    <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                    <input
-                      type="password"
-                      autoComplete="current-password"
-                      value={currentPassword}
-                      onChange={(e) => setCurrentPassword(e.target.value)}
-                      placeholder="Nhập mật khẩu đang sử dụng"
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50/50 py-2.5 pl-9 pr-3.5 text-sm outline-none transition focus:border-teal-600 focus:bg-white focus:ring-2 focus:ring-teal-600/15"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="mb-1.5 block text-xs font-medium text-slate-600">
-                    Mật khẩu mới
-                  </label>
-                  <input
-                    type="password"
-                    autoComplete="new-password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="Tối thiểu 6 ký tự"
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-sm outline-none transition focus:border-teal-600 focus:bg-white focus:ring-2 focus:ring-teal-600/15"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-1.5 block text-xs font-medium text-slate-600">
-                    Xác nhận mật khẩu mới
-                  </label>
-                  <input
-                    type="password"
-                    autoComplete="new-password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="Nhập lại mật khẩu mới"
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-sm outline-none transition focus:border-teal-600 focus:bg-white focus:ring-2 focus:ring-teal-600/15"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="flex justify-end pt-2">
+            <div className="flex justify-end border-t border-slate-100 pt-5">
               <button
                 type="submit"
                 disabled={saving}
-                className="inline-flex items-center gap-2 rounded-xl bg-teal-700 px-5 py-2.5 text-sm font-semibold text-white shadow-xs transition hover:bg-teal-800 active:scale-[0.99] disabled:opacity-60 cursor-pointer"
+                className="inline-flex items-center gap-2 rounded-xl bg-teal-700 px-5 py-2.5 text-sm font-semibold text-white shadow-xs transition hover:bg-teal-800 disabled:opacity-60 cursor-pointer"
               >
                 {saving ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Đang lưu...</span>
+                  </>
                 ) : (
-                  <Save className="h-4 w-4" />
+                  <>
+                    <Save className="h-4 w-4" />
+                    <span>Lưu tên hiển thị</span>
+                  </>
                 )}
-                <span>Lưu thay đổi</span>
               </button>
             </div>
           </form>
@@ -238,11 +247,11 @@ export default function AccountSettings({
 
       <ConfirmModal
         open={confirmOpen}
-        title="Lưu thay đổi tài khoản?"
-        description="Thông tin đăng nhập mới sẽ có hiệu lực ngay sau khi bạn xác nhận."
+        title="Xác nhận đổi tên hiển thị?"
+        description="Tên mới sẽ cập nhật ngay trên phiên đăng nhập hiện tại của bạn."
         confirmText="Lưu thay đổi"
         loading={saving}
-        onConfirm={executeUpdate}
+        onConfirm={() => void executeUpdate()}
         onCancel={() => setConfirmOpen(false)}
       />
     </div>

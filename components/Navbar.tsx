@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
+  Bookmark,
   BookOpen,
+  GraduationCap,
   Headphones,
   LogIn,
   LogOut,
@@ -29,6 +31,34 @@ export default function Navbar({ username, role }: NavbarProps) {
 
   const isLoggedIn = Boolean(username && role);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    const authStatus = url.searchParams.get("auth");
+    const authError = url.searchParams.get("authError");
+    if (!authStatus && !authError) return;
+
+    if (authStatus === "google_linked") {
+      toast.success(
+        "Đã liên kết tài khoản Google thành công và gỡ bỏ mật khẩu cũ!"
+      );
+    } else if (authStatus === "google_ok") {
+      toast.success(
+        `Chào mừng ${username ? `${username} ` : ""}đăng nhập thành công!`
+      );
+    } else if (authError === "google_already_linked") {
+      toast.error(
+        "Tài khoản Google này đã gắn với một tài khoản khác trên hệ thống."
+      );
+    } else if (authError) {
+      toast.error("Không thể hoàn tất xác thực Google. Vui lòng thử lại.");
+    }
+
+    url.searchParams.delete("auth");
+    url.searchParams.delete("authError");
+    window.history.replaceState({}, "", url.pathname + url.search + url.hash);
+  }, [toast, username]);
+
   async function handleLogout() {
     setLoggingOut(true);
     try {
@@ -37,7 +67,12 @@ export default function Navbar({ username, role }: NavbarProps) {
         "Hẹn gặp lại bạn trong buổi luyện tập tiếp theo!",
         "Đã đăng xuất"
       );
-      if (pathname.startsWith("/admin") || pathname === "/account") {
+      if (
+        pathname.startsWith("/admin") ||
+        pathname === "/account" ||
+        pathname === "/saved" ||
+        pathname === "/vocab"
+      ) {
         router.push("/");
       }
       router.refresh();
@@ -64,7 +99,7 @@ export default function Navbar({ username, role }: NavbarProps) {
                 <span className="text-sm sm:text-base font-bold tracking-tight text-slate-900 leading-none">
                   Trg and you
                 </span>
-                <span className="hidden xs:block sm:block mt-0.5 text-[10px] sm:text-[11px] font-medium text-slate-500">
+                <span className="hidden sm:block mt-0.5 text-[11px] font-medium text-slate-500">
                   Listening & Shadowing
                 </span>
               </div>
@@ -82,6 +117,33 @@ export default function Navbar({ username, role }: NavbarProps) {
                 <BookOpen className="h-4 w-4" />
                 <span>Bài học</span>
               </Link>
+
+              {isLoggedIn && (
+                <>
+                  <Link
+                    href="/saved"
+                    className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm font-medium transition ${
+                      pathname === "/saved"
+                        ? "bg-teal-50 text-teal-800"
+                        : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                    }`}
+                  >
+                    <Bookmark className="h-4 w-4" />
+                    <span>Đã lưu</span>
+                  </Link>
+                  <Link
+                    href="/vocab"
+                    className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm font-medium transition ${
+                      pathname === "/vocab"
+                        ? "bg-teal-50 text-teal-800"
+                        : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                    }`}
+                  >
+                    <GraduationCap className="h-4 w-4" />
+                    <span>Từ vựng</span>
+                  </Link>
+                </>
+              )}
 
               {role === "ADMIN" && (
                 <Link
@@ -102,10 +164,37 @@ export default function Navbar({ username, role }: NavbarProps) {
           <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
             {isLoggedIn ? (
               <>
+                <Link
+                  href="/saved"
+                  title="Câu hay đã lưu"
+                  aria-label="Câu hay đã lưu"
+                  className={`inline-flex md:hidden items-center gap-1 rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition ${
+                    pathname === "/saved"
+                      ? "border-teal-600 bg-teal-700 text-white"
+                      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                  }`}
+                >
+                  <Bookmark className="h-4 w-4" />
+                </Link>
+
+                <Link
+                  href="/vocab"
+                  title="Kho từ vựng Flashcard"
+                  aria-label="Kho từ vựng Flashcard"
+                  className={`inline-flex md:hidden items-center gap-1 rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition ${
+                    pathname === "/vocab"
+                      ? "border-teal-600 bg-teal-700 text-white"
+                      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                  }`}
+                >
+                  <GraduationCap className="h-4 w-4" />
+                </Link>
+
                 {role === "ADMIN" && (
                   <Link
                     href="/admin"
                     title="Quản trị"
+                    aria-label="Quản trị"
                     className={`inline-flex md:hidden items-center gap-1 rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition ${
                       pathname.startsWith("/admin")
                         ? "border-teal-600 bg-teal-700 text-white"

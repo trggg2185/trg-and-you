@@ -10,11 +10,18 @@ export const dynamic = "force-dynamic";
 
 export default async function LearnVideoPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ videoId: string }>;
+  searchParams: Promise<{ t?: string }>;
 }) {
   const session = await getSession();
   const { videoId } = await params;
+  const resolvedSearch = await searchParams;
+
+  const rawT = resolvedSearch.t ? Number(resolvedSearch.t) : null;
+  const startAtTime =
+    rawT !== null && Number.isFinite(rawT) && rawT >= 0 ? rawT : null;
 
   const video = await prisma.video.findUnique({
     where: { id: videoId },
@@ -33,16 +40,34 @@ export default async function LearnVideoPage({
     redirect("/");
   }
 
-  const note = session
-    ? await prisma.note.findUnique({
-        where: {
-          userId_videoId: {
-            userId: session.userId,
-            videoId,
+  const [note, savedRows, progress] = session
+    ? await Promise.all([
+        prisma.note.findUnique({
+          where: {
+            userId_videoId: {
+              userId: session.userId,
+              videoId,
+            },
           },
-        },
-      })
-    : null;
+        }),
+        prisma.savedSentence.findMany({
+          where: {
+            userId: session.userId,
+            subtitle: { videoId },
+          },
+          select: { subtitleId: true },
+        }),
+        prisma.learningProgress.findUnique({
+          where: {
+            userId_videoId: {
+              userId: session.userId,
+              videoId,
+            },
+          },
+          select: { lastTime: true },
+        }),
+      ])
+    : [null, [], null];
 
   return (
     <div className="min-h-screen flex flex-col bg-[#f6f7f5]">
@@ -66,10 +91,17 @@ export default async function LearnVideoPage({
           videoId={video.id}
           title={video.title}
           description={video.description}
+          level={video.level}
+          tags={video.tags}
           videoUrl={video.videoUrl}
           subtitles={video.subtitles}
           initialNote={note?.content ?? ""}
+          initialSavedIds={savedRows.map((r) => r.subtitleId)}
+          initialProgressTime={progress?.lastTime ?? 0}
+          startAtTime={startAtTime}
           isLoggedIn={Boolean(session)}
+          currentUserId={session?.userId ?? null}
+          isAdmin={session?.role === "ADMIN"}
         />
       </main>
     </div>

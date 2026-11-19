@@ -31,6 +31,9 @@ export default async function AdminPage() {
       select: {
         id: true,
         username: true,
+        email: true,
+        googleId: true,
+        passwordHash: true,
         role: true,
         isBanned: true,
         createdAt: true,
@@ -47,8 +50,15 @@ export default async function AdminPage() {
   }));
 
   const serializedUsers = users.map((u) => ({
-    ...u,
+    id: u.id,
+    username: u.username,
+    email: u.email,
+    hasGoogle: Boolean(u.googleId),
+    hasPassword: Boolean(u.passwordHash),
+    role: u.role,
+    isBanned: u.isBanned,
     createdAt: u.createdAt.toISOString(),
+    _count: u._count,
   }));
 
   return (

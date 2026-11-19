@@ -58,6 +58,7 @@ export default function SubtitleEditor({
   const toast = useToast();
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const previewEndRef = useRef<number | null>(null);
+  const nextLocalIdRef = useRef(0);
 
   const [subtitles, setSubtitles] = useState<EditableSubtitle[]>(() =>
     initialSubtitles.map((s) => ({
@@ -147,8 +148,9 @@ export default function SubtitleEditor({
 
   function handleAddSentence() {
     const t = Number((videoRef.current?.currentTime ?? 0).toFixed(1));
+    nextLocalIdRef.current += 1;
     const newItem: EditableSubtitle = {
-      localId: `new-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      localId: `new-${nextLocalIdRef.current}`,
       startTime: t,
       endTime: Number((t + 2.5).toFixed(1)),
       speaker: "",

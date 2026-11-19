@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { downloadR2ObjectToFile } from "@/lib/r2";
 import { extractAudioToMp3 } from "@/lib/ffmpeg";
 import { transcribeAudioWithGemini } from "@/lib/gemini";
+import { generateAndUploadThumbnail } from "@/lib/thumbnail";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -42,7 +43,12 @@ export async function POST(
     tempMp3Path = path.join(tmpDir, `reproc-${video.id}-${Date.now()}.mp3`);
 
     await downloadR2ObjectToFile(video.r2Key, tempVideoPath);
-    await extractAudioToMp3(tempVideoPath, tempMp3Path);
+    const [, thumbResult] = await Promise.all([
+      extractAudioToMp3(tempVideoPath, tempMp3Path),
+      !video.thumbnailUrl
+        ? generateAndUploadThumbnail(video.id, tempVideoPath)
+        : Promise.resolve(null),
+    ]);
     const generated = await transcribeAudioWithGemini(tempMp3Path);
 
     if (generated.length === 0) {
@@ -72,7 +78,15 @@ export async function POST(
       }
       await tx.video.update({
         where: { id: videoId },
-        data: { status: "READY" },
+        data: {
+          status: "READY",
+          ...(thumbResult
+            ? {
+                thumbnailUrl: thumbResult.thumbnailUrl,
+                thumbnailKey: thumbResult.thumbnailKey,
+              }
+            : {}),
+        },
       });
     });
 

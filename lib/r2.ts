@@ -6,6 +6,7 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { createWriteStream } from "fs";
+import fs from "fs/promises";
 import { pipeline } from "stream/promises";
 import { Readable } from "stream";
 
@@ -101,4 +102,27 @@ export async function deleteR2Object(r2Key: string): Promise<void> {
       Key: r2Key,
     })
   );
+}
+
+/** Uploads a small local file (e.g., JPEG thumbnail) to R2 and returns its public URL. */
+export async function uploadFileToR2(
+  r2Key: string,
+  filePath: string,
+  contentType: string
+): Promise<string> {
+  const { bucketName } = getR2Config();
+  const client = createR2Client();
+  const body = await fs.readFile(filePath);
+
+  await client.send(
+    new PutObjectCommand({
+      Bucket: bucketName,
+      Key: r2Key,
+      Body: body,
+      ContentType: contentType,
+      CacheControl: "public, max-age=31536000, immutable",
+    })
+  );
+
+  return getPublicVideoUrl(r2Key);
 }

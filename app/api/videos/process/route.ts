@@ -7,6 +7,8 @@ import { prisma } from "@/lib/prisma";
 import { downloadR2ObjectToFile, getPublicVideoUrl } from "@/lib/r2";
 import { extractAudioToMp3 } from "@/lib/ffmpeg";
 import { transcribeAudioWithGemini } from "@/lib/gemini";
+import { generateAndUploadThumbnail } from "@/lib/thumbnail";
+import { normalizeLevel, normalizeTagsInput } from "@/lib/lessonMeta";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -27,6 +29,8 @@ export async function POST(request: NextRequest) {
     const description =
       typeof body.description === "string" ? body.description.trim() : null;
     const r2Key = typeof body.r2Key === "string" ? body.r2Key.trim() : "";
+    const level = normalizeLevel(body.level);
+    const tags = normalizeTagsInput(body.tags);
 
     if (!title || !r2Key) {
       return NextResponse.json(
@@ -42,6 +46,8 @@ export async function POST(request: NextRequest) {
         description: description || null,
         videoUrl,
         r2Key,
+        level,
+        tags,
         status: "PROCESSING",
       },
     });
@@ -55,10 +61,13 @@ export async function POST(request: NextRequest) {
     // 1. Download video from R2 to /tmp
     await downloadR2ObjectToFile(r2Key, tempVideoPath);
 
-    // 2. Extract lightweight mono .mp3 using ffmpeg-static
-    await extractAudioToMp3(tempVideoPath, tempMp3Path);
+    // 2. Extract lightweight mono .mp3 & capture JPEG thumbnail in parallel (thumbnail is best-effort)
+    const [, thumbResult] = await Promise.all([
+      extractAudioToMp3(tempVideoPath, tempMp3Path),
+      generateAndUploadThumbnail(video.id, tempVideoPath),
+    ]);
 
-    // 3. Transcribe + generate IPA with Gemini 2.5 Flash
+    // 3. Transcribe + generate IPA with Gemini
     const subtitles = await transcribeAudioWithGemini(tempMp3Path);
 
     // 4. Persist subtitles and mark video READY
@@ -79,7 +88,15 @@ export async function POST(request: NextRequest) {
 
       await tx.video.update({
         where: { id: video.id },
-        data: { status: "READY" },
+        data: {
+          status: "READY",
+          ...(thumbResult
+            ? {
+                thumbnailUrl: thumbResult.thumbnailUrl,
+                thumbnailKey: thumbResult.thumbnailKey,
+              }
+            : {}),
+        },
       });
     });
 

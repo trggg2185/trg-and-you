@@ -22,6 +22,11 @@ import {
 import { useToast } from "@/components/ToastProvider";
 import ConfirmModal from "@/components/ConfirmModal";
 import UserManagement, { type AdminUserItem } from "@/components/UserManagement";
+import {
+  LESSON_LEVELS,
+  LEVEL_BADGE_STYLES,
+  parseTagsList,
+} from "@/lib/lessonMeta";
 
 export interface AdminVideoItem {
   id: string;
@@ -29,6 +34,9 @@ export interface AdminVideoItem {
   description: string | null;
   videoUrl: string;
   r2Key: string;
+  thumbnailUrl?: string | null;
+  level?: string | null;
+  tags?: string | null;
   status: string;
   createdAt: string;
   _count: {
@@ -83,8 +91,11 @@ export default function AdminDashboard({
   const toast = useToast();
   const [activeTab, setActiveTab] = useState<"videos" | "users">("videos");
   const [videos, setVideos] = useState<AdminVideoItem[]>(initialVideos);
+  const [userCount, setUserCount] = useState(initialUsers.length);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [level, setLevel] = useState("");
+  const [tags, setTags] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -101,6 +112,8 @@ export default function AdminDashboard({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
+  const [editLevel, setEditLevel] = useState("");
+  const [editTags, setEditTags] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
 
   const isBusy = stage !== "idle";
@@ -164,6 +177,8 @@ export default function AdminDashboard({
         body: JSON.stringify({
           title: title.trim(),
           description: description.trim() || undefined,
+          level: level || null,
+          tags: tags.trim(),
           r2Key: presignData.r2Key,
         }),
       });
@@ -183,6 +198,8 @@ export default function AdminDashboard({
       );
       setTitle("");
       setDescription("");
+      setLevel("");
+      setTags("");
       setFile(null);
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
@@ -222,6 +239,8 @@ export default function AdminDashboard({
     setEditingId(video.id);
     setEditTitle(video.title);
     setEditDescription(video.description ?? "");
+    setEditLevel(video.level ?? "");
+    setEditTags(video.tags ?? "");
   }
 
   async function saveEdit(videoId: string) {
@@ -237,6 +256,8 @@ export default function AdminDashboard({
         body: JSON.stringify({
           title: editTitle.trim(),
           description: editDescription.trim(),
+          level: editLevel || null,
+          tags: editTags.trim(),
         }),
       });
       const data = await res.json();
@@ -251,6 +272,8 @@ export default function AdminDashboard({
                 ...v,
                 title: data.video.title,
                 description: data.video.description,
+                level: data.video.level,
+                tags: data.video.tags,
               }
             : v
         )
@@ -290,7 +313,7 @@ export default function AdminDashboard({
           }`}
         >
           <Users className="h-4 w-4 shrink-0" />
-          <span className="truncate">Người dùng ({initialUsers.length})</span>
+          <span className="truncate">Người dùng ({userCount})</span>
         </button>
       </div>
 
@@ -298,6 +321,7 @@ export default function AdminDashboard({
         <UserManagement
           initialUsers={initialUsers}
           currentAdminId={currentAdminId}
+          onUserCountChange={setUserCount}
         />
       ) : (
         <div className="animate-fade-up grid gap-8 lg:grid-cols-12">
@@ -346,6 +370,40 @@ export default function AdminDashboard({
                 placeholder="Chủ đề giao tiếp, mẫu câu nổi bật..."
                 className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2 text-base sm:text-sm outline-none transition focus:border-teal-600 focus:bg-white focus:ring-2 focus:ring-teal-600/15 disabled:bg-slate-100"
               />
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                  Trình độ (CEFR)
+                </label>
+                <select
+                  disabled={isBusy}
+                  value={level}
+                  onChange={(e) => setLevel(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2.5 text-base sm:text-sm outline-none transition focus:border-teal-600 focus:bg-white focus:ring-2 focus:ring-teal-600/15 disabled:bg-slate-100"
+                >
+                  <option value="">Chưa phân loại</option>
+                  {LESSON_LEVELS.map((lv) => (
+                    <option key={lv} value={lv}>
+                      {lv}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                  Thẻ chủ đề
+                </label>
+                <input
+                  type="text"
+                  disabled={isBusy}
+                  value={tags}
+                  onChange={(e) => setTags(e.target.value)}
+                  placeholder="vd: giao tiếp, mua sắm"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-base sm:text-sm outline-none transition focus:border-teal-600 focus:bg-white focus:ring-2 focus:ring-teal-600/15 disabled:bg-slate-100"
+                />
+              </div>
             </div>
 
             <div>
@@ -462,6 +520,27 @@ export default function AdminDashboard({
                           placeholder="Mô tả ngắn"
                           className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none focus:border-teal-600"
                         />
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          <select
+                            value={editLevel}
+                            onChange={(e) => setEditLevel(e.target.value)}
+                            className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs outline-none focus:border-teal-600"
+                          >
+                            <option value="">Chưa phân trình độ</option>
+                            {LESSON_LEVELS.map((lv) => (
+                              <option key={lv} value={lv}>
+                                Trình độ {lv}
+                              </option>
+                            ))}
+                          </select>
+                          <input
+                            type="text"
+                            value={editTags}
+                            onChange={(e) => setEditTags(e.target.value)}
+                            placeholder="Thẻ cách nhau dấu phẩy (vd: giao tiếp, du lịch)"
+                            className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs outline-none focus:border-teal-600"
+                          />
+                        </div>
                         <div className="flex justify-end gap-2">
                           <button
                             type="button"
@@ -495,7 +574,29 @@ export default function AdminDashboard({
                               {video.title}
                             </h3>
                             <StatusBadge status={video.status} />
+                            {video.level && (
+                              <span
+                                className={`rounded-md border px-2 py-0.5 text-[11px] font-bold ${
+                                  LEVEL_BADGE_STYLES[video.level] ??
+                                  "bg-slate-100 text-slate-700 border-slate-200"
+                                }`}
+                              >
+                                {video.level}
+                              </span>
+                            )}
                           </div>
+                          {parseTagsList(video.tags).length > 0 && (
+                            <div className="mt-1 flex flex-wrap gap-1">
+                              {parseTagsList(video.tags).map((tag) => (
+                                <span
+                                  key={tag}
+                                  className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600"
+                                >
+                                  #{tag}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                           {video.description && (
                             <p className="mt-0.5 line-clamp-1 text-xs text-slate-500">
                               {video.description}

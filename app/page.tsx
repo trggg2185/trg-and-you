@@ -1,5 +1,6 @@
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getStudySummary } from "@/lib/stats";
 import Navbar from "@/components/Navbar";
 import LessonLibrary from "@/components/LessonLibrary";
 
@@ -8,24 +9,61 @@ export const dynamic = "force-dynamic";
 export default async function HomePage() {
   const session = await getSession();
 
-  const videos = await prisma.video.findMany({
-    where: { status: "READY" },
-    orderBy: { createdAt: "desc" },
-    include: {
-      _count: {
-        select: { subtitles: true },
+  const [videos, progresses, studySummary, dueVocabCount] = await Promise.all([
+    prisma.video.findMany({
+      where: { status: "READY" },
+      orderBy: { createdAt: "desc" },
+      include: {
+        _count: {
+          select: { subtitles: true },
+        },
       },
-    },
-  });
+    }),
+    session
+      ? prisma.learningProgress.findMany({
+          where: { userId: session.userId },
+          select: {
+            videoId: true,
+            lastTime: true,
+            duration: true,
+            completed: true,
+          },
+        })
+      : Promise.resolve([]),
+    session ? getStudySummary(session.userId) : Promise.resolve(null),
+    session
+      ? prisma.vocabItem.count({
+          where: {
+            userId: session.userId,
+            nextReviewAt: { lte: new Date() },
+          },
+        })
+      : Promise.resolve(0),
+  ]);
 
-  const serialized = videos.map((v) => ({
-    id: v.id,
-    title: v.title,
-    description: v.description,
-    videoUrl: v.videoUrl,
-    createdAt: v.createdAt.toISOString(),
-    subtitleCount: v._count.subtitles,
-  }));
+  const progressMap = new Map(progresses.map((p) => [p.videoId, p]));
+
+  const serialized = videos.map((v) => {
+    const prog = progressMap.get(v.id);
+    return {
+      id: v.id,
+      title: v.title,
+      description: v.description,
+      videoUrl: v.videoUrl,
+      thumbnailUrl: v.thumbnailUrl,
+      level: v.level,
+      tags: v.tags,
+      createdAt: v.createdAt.toISOString(),
+      subtitleCount: v._count.subtitles,
+      progress: prog
+        ? {
+            lastTime: prog.lastTime,
+            duration: prog.duration,
+            completed: prog.completed,
+          }
+        : null,
+    };
+  });
 
   return (
     <div className="min-h-screen flex flex-col bg-[#f6f7f5]">
@@ -38,6 +76,8 @@ export default async function HomePage() {
         <LessonLibrary
           videos={serialized}
           isAdmin={session?.role === "ADMIN"}
+          studySummary={studySummary}
+          dueVocabCount={dueVocabCount}
         />
       </main>
     </div>

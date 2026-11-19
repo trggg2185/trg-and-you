@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { AlertTriangle, HelpCircle, Loader2, X } from "lucide-react";
+
+const emptySubscribe = () => () => {};
 
 interface ConfirmModalProps {
   open: boolean;
@@ -27,11 +29,11 @@ export default function ConfirmModal({
   onConfirm,
   onCancel,
 }: ConfirmModalProps) {
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false
+  );
 
   useEffect(() => {
     if (!open) return;

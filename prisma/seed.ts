@@ -4,12 +4,12 @@ import bcrypt from "bcryptjs";
 const prisma = new PrismaClient();
 
 async function main() {
-  const adminUsername = process.env.ADMIN_USERNAME;
+  const adminUsername = process.env.ADMIN_USERNAME?.trim();
   const adminPassword = process.env.ADMIN_PASSWORD;
 
-  if (!adminUsername || !adminPassword) {
+  if (!adminUsername) {
     console.warn(
-      "ADMIN_USERNAME or ADMIN_PASSWORD is not set in environment. Skipping admin seed."
+      "ADMIN_USERNAME is not set in environment. Skipping admin seed."
     );
     return;
   }
@@ -18,27 +18,51 @@ async function main() {
     where: { username: adminUsername },
   });
 
-  const passwordHash = await bcrypt.hash(adminPassword, 10);
-
   if (existing) {
-    await prisma.user.update({
-      where: { username: adminUsername },
-      data: {
-        passwordHash,
-        role: "ADMIN",
-      },
-    });
-    console.log(`Updated existing ADMIN user: ${adminUsername}`);
-  } else {
-    await prisma.user.create({
-      data: {
-        username: adminUsername,
-        passwordHash,
-        role: "ADMIN",
-      },
-    });
-    console.log(`Created ADMIN user: ${adminUsername}`);
+    // Keep ADMIN role, but NEVER overwrite passwordHash if user already linked Google!
+    if (existing.googleId) {
+      if (existing.role !== "ADMIN") {
+        await prisma.user.update({
+          where: { id: existing.id },
+          data: { role: "ADMIN" },
+        });
+      }
+      console.log(
+        `Admin user "${adminUsername}" is already linked with Google. Keeping passwordless Google auth.`
+      );
+      return;
+    }
+
+    if (adminPassword) {
+      const passwordHash = await bcrypt.hash(adminPassword, 10);
+      await prisma.user.update({
+        where: { id: existing.id },
+        data: {
+          passwordHash,
+          role: "ADMIN",
+        },
+      });
+      console.log(`Updated unlinked ADMIN user: ${adminUsername}`);
+    }
+    return;
   }
+
+  if (!adminPassword) {
+    console.warn(
+      "ADMIN_PASSWORD is not set for initial admin bootstrap. Skipping admin seed."
+    );
+    return;
+  }
+
+  const passwordHash = await bcrypt.hash(adminPassword, 10);
+  await prisma.user.create({
+    data: {
+      username: adminUsername,
+      passwordHash,
+      role: "ADMIN",
+    },
+  });
+  console.log(`Created bootstrap ADMIN user: ${adminUsername}`);
 }
 
 main()

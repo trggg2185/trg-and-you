@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -28,7 +27,6 @@ export async function PATCH(
     const body = await request.json();
     const updateData: {
       username?: string;
-      passwordHash?: string;
       role?: string;
       isBanned?: boolean;
     } = {};
@@ -38,13 +36,13 @@ export async function PATCH(
       if (nextUsername !== target.username) {
         if (nextUsername.length < 3 || nextUsername.length > 32) {
           return NextResponse.json(
-            { error: "Tên đăng nhập phải từ 3 đến 32 ký tự." },
+            { error: "Tên hiển thị phải từ 3 đến 32 ký tự." },
             { status: 400 }
           );
         }
         if (!/^[a-zA-Z0-9_.-]+$/.test(nextUsername)) {
           return NextResponse.json(
-            { error: "Tên đăng nhập chỉ được chứa chữ, số và ký tự _ . -" },
+            { error: "Tên hiển thị chỉ được chứa chữ, số và ký tự _ . -" },
             { status: 400 }
           );
         }
@@ -53,22 +51,12 @@ export async function PATCH(
         });
         if (duplicate && duplicate.id !== target.id) {
           return NextResponse.json(
-            { error: "Tên đăng nhập này đã được sử dụng." },
+            { error: "Tên hiển thị này đã được sử dụng." },
             { status: 409 }
           );
         }
         updateData.username = nextUsername;
       }
-    }
-
-    if (typeof body.password === "string" && body.password.length > 0) {
-      if (body.password.length < 6) {
-        return NextResponse.json(
-          { error: "Mật khẩu mới phải có ít nhất 6 ký tự." },
-          { status: 400 }
-        );
-      }
-      updateData.passwordHash = await bcrypt.hash(body.password, 10);
     }
 
     if (body.role === "ADMIN" || body.role === "USER") {
@@ -97,6 +85,9 @@ export async function PATCH(
       select: {
         id: true,
         username: true,
+        email: true,
+        googleId: true,
+        passwordHash: true,
         role: true,
         isBanned: true,
         createdAt: true,
@@ -106,7 +97,19 @@ export async function PATCH(
       },
     });
 
-    return NextResponse.json({ user: updated });
+    return NextResponse.json({
+      user: {
+        id: updated.id,
+        username: updated.username,
+        email: updated.email,
+        hasGoogle: Boolean(updated.googleId),
+        hasPassword: Boolean(updated.passwordHash),
+        role: updated.role,
+        isBanned: updated.isBanned,
+        createdAt: updated.createdAt,
+        _count: updated._count,
+      },
+    });
   } catch (error) {
     console.error("Update user error:", error);
     return NextResponse.json(

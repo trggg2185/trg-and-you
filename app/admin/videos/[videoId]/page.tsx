@@ -12,10 +12,7 @@ export default async function AdminVideoEditPage({
   params: Promise<{ videoId: string }>;
 }) {
   const session = await getSession();
-  if (!session) {
-    redirect("/login");
-  }
-  if (session.role !== "ADMIN") {
+  if (!session || session.role !== "ADMIN") {
     redirect("/");
   }
 

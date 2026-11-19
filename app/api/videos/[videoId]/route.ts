@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { deleteR2Object } from "@/lib/r2";
+import { normalizeLevel, normalizeTagsInput } from "@/lib/lessonMeta";
 
 export async function GET(
   _request: NextRequest,
@@ -69,6 +70,8 @@ export async function PATCH(
     const title = typeof body.title === "string" ? body.title.trim() : "";
     const description =
       typeof body.description === "string" ? body.description.trim() : null;
+    const hasLevel = Object.prototype.hasOwnProperty.call(body, "level");
+    const hasTags = Object.prototype.hasOwnProperty.call(body, "tags");
 
     if (!title) {
       return NextResponse.json(
@@ -90,6 +93,8 @@ export async function PATCH(
       data: {
         title,
         description: description || null,
+        ...(hasLevel ? { level: normalizeLevel(body.level) } : {}),
+        ...(hasTags ? { tags: normalizeTagsInput(body.tags) } : {}),
       },
       include: {
         _count: {
@@ -133,6 +138,9 @@ export async function DELETE(
     // Delete from R2 first (ignore if already missing on R2)
     try {
       await deleteR2Object(video.r2Key);
+      if (video.thumbnailKey) {
+        await deleteR2Object(video.thumbnailKey).catch(() => {});
+      }
     } catch (r2Error) {
       console.warn("Failed to delete R2 object (continuing DB delete):", r2Error);
     }

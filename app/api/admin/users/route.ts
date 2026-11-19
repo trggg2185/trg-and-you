@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -13,11 +12,14 @@ export async function GET() {
       );
     }
 
-    const users = await prisma.user.findMany({
+    const rows = await prisma.user.findMany({
       orderBy: { createdAt: "desc" },
       select: {
         id: true,
         username: true,
+        email: true,
+        googleId: true,
+        passwordHash: true,
         role: true,
         isBanned: true,
         createdAt: true,
@@ -26,6 +28,18 @@ export async function GET() {
         },
       },
     });
+
+    const users = rows.map((u) => ({
+      id: u.id,
+      username: u.username,
+      email: u.email,
+      hasGoogle: Boolean(u.googleId),
+      hasPassword: Boolean(u.passwordHash),
+      role: u.role,
+      isBanned: u.isBanned,
+      createdAt: u.createdAt,
+      _count: u._count,
+    }));
 
     return NextResponse.json({ users });
   } catch (error) {
@@ -48,51 +62,71 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const username =
+    const email =
+      typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+    const rawUsername =
       typeof body.username === "string" ? body.username.trim() : "";
-    const password = typeof body.password === "string" ? body.password : "";
     const role = body.role === "ADMIN" ? "ADMIN" : "USER";
+
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return NextResponse.json(
+        { error: "Vui lòng nhập địa chỉ Gmail / Email Google hợp lệ." },
+        { status: 400 }
+      );
+    }
+
+    const username =
+      rawUsername ||
+      email
+        .split("@")[0]
+        .replace(/[^a-zA-Z0-9_.-]+/g, "_")
+        .slice(0, 28);
 
     if (username.length < 3 || username.length > 32) {
       return NextResponse.json(
-        { error: "Tên đăng nhập phải từ 3 đến 32 ký tự." },
+        { error: "Tên hiển thị phải từ 3 đến 32 ký tự." },
         { status: 400 }
       );
     }
 
     if (!/^[a-zA-Z0-9_.-]+$/.test(username)) {
       return NextResponse.json(
-        { error: "Tên đăng nhập chỉ được chứa chữ, số và ký tự _ . -" },
+        { error: "Tên hiển thị chỉ được chứa chữ, số và ký tự _ . -" },
         { status: 400 }
       );
     }
 
-    if (password.length < 6) {
+    const conflict = await prisma.user.findFirst({
+      where: {
+        OR: [{ username }, { email }],
+      },
+    });
+    if (conflict) {
       return NextResponse.json(
-        { error: "Mật khẩu phải có ít nhất 6 ký tự." },
-        { status: 400 }
-      );
-    }
-
-    const existing = await prisma.user.findUnique({ where: { username } });
-    if (existing) {
-      return NextResponse.json(
-        { error: "Tên đăng nhập đã tồn tại." },
+        {
+          error:
+            conflict.email === email
+              ? "Email này đã có trong hệ thống."
+              : "Tên hiển thị này đã tồn tại.",
+        },
         { status: 409 }
       );
     }
 
-    const passwordHash = await bcrypt.hash(password, 10);
     const created = await prisma.user.create({
       data: {
         username,
-        passwordHash,
+        email,
+        passwordHash: null,
         role,
         isBanned: false,
       },
       select: {
         id: true,
         username: true,
+        email: true,
+        googleId: true,
+        passwordHash: true,
         role: true,
         isBanned: true,
         createdAt: true,
@@ -102,11 +136,26 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({ user: created }, { status: 201 });
-  } catch (error) {
-    console.error("Create user error:", error);
     return NextResponse.json(
-      { error: "Không thể tạo tài khoản lúc này. Vui lòng thử lại." },
+      {
+        user: {
+          id: created.id,
+          username: created.username,
+          email: created.email,
+          hasGoogle: Boolean(created.googleId),
+          hasPassword: Boolean(created.passwordHash),
+          role: created.role,
+          isBanned: created.isBanned,
+          createdAt: created.createdAt,
+          _count: created._count,
+        },
+      },
+      { status: 201 }
+    );
+  } catch (error) {
+    console.error("Create invited Google user error:", error);
+    return NextResponse.json(
+      { error: "Không thể thêm người dùng lúc này." },
       { status: 500 }
     );
   }

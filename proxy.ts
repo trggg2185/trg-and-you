@@ -8,6 +8,9 @@ const PUBLIC_EXACT_PATHS = new Set([
   "/api/auth/register",
   "/api/auth/logout",
   "/api/auth/me",
+  "/api/auth/google",
+  "/api/auth/google/callback",
+  "/api/auth/legacy-link",
 ]);
 
 function isPublicPath(pathname: string, method: string): boolean {
@@ -27,7 +30,9 @@ function isPublicPath(pathname: string, method: string): boolean {
   if (
     method === "GET" &&
     (pathname === "/api/videos" ||
-      (/^\/api\/videos\/[^/]+$/.test(pathname)))
+      /^\/api\/videos\/[^/]+$/.test(pathname) ||
+      pathname === "/api/words/lookup" ||
+      pathname === "/api/shared-notes")
   ) {
     return true;
   }
@@ -54,19 +59,10 @@ function isAdminOnlyPath(pathname: string, method: string): boolean {
   return false;
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (isPublicPath(pathname, request.method)) {
-    if (pathname === "/login") {
-      const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
-      if (token) {
-        const session = await verifySessionToken(token);
-        if (session) {
-          return NextResponse.redirect(new URL("/", request.url));
-        }
-      }
-    }
     return NextResponse.next();
   }
 

@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import {
   getSession,
@@ -20,10 +19,6 @@ export async function PATCH(request: NextRequest) {
     const body = await request.json();
     const newUsername =
       typeof body.username === "string" ? body.username.trim() : "";
-    const currentPassword =
-      typeof body.currentPassword === "string" ? body.currentPassword : "";
-    const newPassword =
-      typeof body.newPassword === "string" ? body.newPassword : "";
 
     const user = await prisma.user.findUnique({
       where: { id: session.userId },
@@ -36,75 +31,40 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    const updateData: { username?: string; passwordHash?: string } = {};
-
-    if (newUsername && newUsername !== user.username) {
-      if (newUsername.length < 3 || newUsername.length > 32) {
-        return NextResponse.json(
-          { error: "Tên đăng nhập phải từ 3 đến 32 ký tự." },
-          { status: 400 }
-        );
-      }
-
-      if (!/^[a-zA-Z0-9_.-]+$/.test(newUsername)) {
-        return NextResponse.json(
-          { error: "Tên đăng nhập chỉ được chứa chữ, số và ký tự _ . -" },
-          { status: 400 }
-        );
-      }
-
-      const duplicate = await prisma.user.findUnique({
-        where: { username: newUsername },
-      });
-      if (duplicate && duplicate.id !== user.id) {
-        return NextResponse.json(
-          { error: "Tên đăng nhập này đã được sử dụng." },
-          { status: 409 }
-        );
-      }
-
-      updateData.username = newUsername;
-    }
-
-    if (newPassword) {
-      if (!currentPassword) {
-        return NextResponse.json(
-          { error: "Vui lòng nhập mật khẩu hiện tại để đổi mật khẩu." },
-          { status: 400 }
-        );
-      }
-
-      const validCurrent = await bcrypt.compare(
-        currentPassword,
-        user.passwordHash
-      );
-      if (!validCurrent) {
-        return NextResponse.json(
-          { error: "Mật khẩu hiện tại chưa chính xác." },
-          { status: 400 }
-        );
-      }
-
-      if (newPassword.length < 6) {
-        return NextResponse.json(
-          { error: "Mật khẩu mới phải có ít nhất 6 ký tự." },
-          { status: 400 }
-        );
-      }
-
-      updateData.passwordHash = await bcrypt.hash(newPassword, 10);
-    }
-
-    if (!updateData.username && !updateData.passwordHash) {
+    if (!newUsername || newUsername === user.username) {
       return NextResponse.json(
         { error: "Không có thay đổi nào cần cập nhật." },
         { status: 400 }
       );
     }
 
+    if (newUsername.length < 3 || newUsername.length > 32) {
+      return NextResponse.json(
+        { error: "Tên hiển thị phải từ 3 đến 32 ký tự." },
+        { status: 400 }
+      );
+    }
+
+    if (!/^[a-zA-Z0-9_.-]+$/.test(newUsername)) {
+      return NextResponse.json(
+        { error: "Tên hiển thị chỉ được chứa chữ, số và ký tự _ . -" },
+        { status: 400 }
+      );
+    }
+
+    const duplicate = await prisma.user.findUnique({
+      where: { username: newUsername },
+    });
+    if (duplicate && duplicate.id !== user.id) {
+      return NextResponse.json(
+        { error: "Tên hiển thị này đã được sử dụng." },
+        { status: 409 }
+      );
+    }
+
     const updated = await prisma.user.update({
       where: { id: user.id },
-      data: updateData,
+      data: { username: newUsername },
     });
 
     const role = updated.role === "ADMIN" ? "ADMIN" : "USER";
@@ -120,7 +80,7 @@ export async function PATCH(request: NextRequest) {
         username: updated.username,
         role,
       },
-      message: "Cập nhật thông tin tài khoản thành công.",
+      message: "Cập nhật tên hiển thị thành công.",
     });
 
     response.cookies.set(SESSION_COOKIE_NAME, token, {

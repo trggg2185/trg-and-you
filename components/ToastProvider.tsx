@@ -65,7 +65,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       lastToastRef.current = { key: dedupeKey, at: now };
 
       const id = `${now}-${Math.random().toString(36).slice(2, 8)}`;
-      setToasts((prev) => [...prev.slice(-4), { id, type, title, message }]);
+      setToasts((prev) => [...prev.slice(-1), { id, type, title, message }]);
 
       if (duration > 0) {
         setTimeout(() => {
@@ -78,17 +78,17 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const success = useCallback(
     (message: string, title?: string) =>
-      showToast({ type: "success", message, title }),
+      showToast({ type: "success", message, title, duration: 3500 }),
     [showToast]
   );
   const error = useCallback(
     (message: string, title?: string) =>
-      showToast({ type: "error", message, title }),
+      showToast({ type: "error", message, title, duration: 4500 }),
     [showToast]
   );
   const info = useCallback(
     (message: string, title?: string) =>
-      showToast({ type: "info", message, title }),
+      showToast({ type: "info", message, title, duration: 2600 }),
     [showToast]
   );
 
@@ -96,10 +96,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     <ToastContext.Provider value={{ showToast, success, error, info }}>
       {children}
 
-      {/* Toast Container (slides in from right to left) */}
+      {/* Toast Container (slides in from right to left at bottom so it never covers top controls/navbar) */}
       <div
         aria-live="polite"
-        className="pointer-events-none fixed inset-x-3 top-3 z-50 flex flex-col gap-2.5 sm:inset-x-auto sm:right-6 sm:top-6 sm:w-full sm:max-w-sm"
+        className="pointer-events-none fixed inset-x-3 bottom-3 z-50 flex flex-col gap-2.5 sm:inset-x-auto sm:bottom-5 sm:right-5 sm:w-full sm:max-w-sm"
       >
         {toasts.map((toast) => {
           const styles =
@@ -130,7 +130,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             <div
               key={toast.id}
               role="status"
-              className={`pointer-events-auto animate-toast-in flex items-start gap-3 rounded-2xl border ${styles.border} p-3.5 shadow-lg shadow-slate-900/8 backdrop-blur`}
+              className={`pointer-events-none animate-toast-in flex items-start gap-3 rounded-2xl border ${styles.border} p-3 sm:p-3.5 shadow-lg shadow-slate-900/8 backdrop-blur`}
             >
               <div
                 className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${styles.iconWrap}`}
@@ -149,7 +149,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 type="button"
                 onClick={() => dismiss(toast.id)}
                 aria-label="Đóng thông báo"
-                className="rounded-lg p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 cursor-pointer"
+                className="pointer-events-auto rounded-lg p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 cursor-pointer"
               >
                 <X className="h-3.5 w-3.5" />
               </button>

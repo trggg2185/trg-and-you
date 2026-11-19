@@ -1,7 +1,6 @@
 import { GoogleGenAI, Type, createPartFromUri } from "@google/genai";
 import fs from "fs/promises";
 import os from "os";
-import path from "path";
 import { splitAudioIntoChunks, type AudioChunk } from "@/lib/ffmpeg";
 
 export interface GeneratedSubtitle {
@@ -464,4 +463,90 @@ export async function transcribeAudioWithGemini(
         .map((c) => fs.unlink(c.filePath).catch(() => {}))
     );
   }
+}
+
+export interface WordLookupGeminiResult {
+  phonetic: string;
+  partOfSpeech: string;
+  meaningVi: string;
+}
+
+const wordLookupSchema = {
+  type: Type.OBJECT,
+  properties: {
+    phonetic: {
+      type: Type.STRING,
+      description: "IPA phonetic transcription enclosed in slashes, e.g. /həˈloʊ/.",
+    },
+    partOfSpeech: {
+      type: Type.STRING,
+      description:
+        "Short part of speech in Vietnamese or standard abbreviation, e.g. 'danh từ', 'động từ', 'tính từ', 'trạng từ', 'thán từ'.",
+    },
+    meaningVi: {
+      type: Type.STRING,
+      description:
+        "Concise natural Vietnamese meaning(s) separated by semicolons, max 12 words.",
+    },
+  },
+  required: ["phonetic", "partOfSpeech", "meaningVi"],
+};
+
+const FAST_TEXT_MODELS = [
+  "gemini-3.5-flash-lite",
+  "gemini-3.1-flash-lite",
+  "gemini-3.7-flash",
+] as const;
+
+/**
+ * Looks up short Vietnamese meaning, part of speech, and IPA using Gemini Lite models
+ * with automatic key/model rotation.
+ */
+export async function lookupWordWithGemini(
+  word: string,
+  contextSentence?: string
+): Promise<WordLookupGeminiResult | null> {
+  const apiKeys = getGeminiApiKeys();
+  if (apiKeys.length === 0) return null;
+
+  const prompt = contextSentence
+    ? `Give concise Vietnamese dictionary definition, part of speech, and IPA for the English word "${word}" in context: "${contextSentence}".`
+    : `Give concise Vietnamese dictionary definition, part of speech, and IPA for the English word "${word}".`;
+
+  for (const model of FAST_TEXT_MODELS) {
+    for (const apiKey of apiKeys) {
+      try {
+        const ai = createGeminiClient(apiKey);
+        const res = await ai.models.generateContent({
+          model,
+          contents: prompt,
+          config: {
+            responseMimeType: "application/json",
+            responseSchema: wordLookupSchema,
+            temperature: 0.1,
+          },
+        });
+        const text = res.text;
+        if (!text) continue;
+        const parsed = JSON.parse(text) as Partial<WordLookupGeminiResult>;
+        if (parsed.meaningVi) {
+          return {
+            phonetic: parsed.phonetic?.trim() || "",
+            partOfSpeech: parsed.partOfSpeech?.trim() || "",
+            meaningVi: parsed.meaningVi.trim(),
+          };
+        }
+      } catch (err) {
+        if (isRateLimitError(err)) {
+          continue;
+        }
+        if (isTransientServerError(err)) {
+          break;
+        }
+        continue;
+      }
+    }
+  }
+
+  return null;
 }

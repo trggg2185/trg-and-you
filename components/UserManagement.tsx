@@ -4,8 +4,11 @@ import { FormEvent, useState } from "react";
 import {
   Ban,
   Check,
+  CheckCircle2,
   Edit3,
+  KeyRound,
   Loader2,
+  Mail,
   Shield,
   ShieldCheck,
   Unlock,
@@ -19,6 +22,9 @@ import ConfirmModal from "@/components/ConfirmModal";
 export interface AdminUserItem {
   id: string;
   username: string;
+  email?: string | null;
+  hasGoogle?: boolean;
+  hasPassword?: boolean;
   role: string;
   isBanned: boolean;
   createdAt: string;
@@ -30,25 +36,26 @@ export interface AdminUserItem {
 interface UserManagementProps {
   initialUsers: AdminUserItem[];
   currentAdminId: string;
+  onUserCountChange?: (count: number) => void;
 }
 
 export default function UserManagement({
   initialUsers,
   currentAdminId,
+  onUserCountChange,
 }: UserManagementProps) {
   const toast = useToast();
   const [users, setUsers] = useState<AdminUserItem[]>(initialUsers);
 
-  // Create form state
+  // Invite / pre-create by Google email form state
+  const [newEmail, setNewEmail] = useState("");
   const [newUsername, setNewUsername] = useState("");
-  const [newPassword, setNewPassword] = useState("");
   const [newRole, setNewRole] = useState<"USER" | "ADMIN">("USER");
   const [creating, setCreating] = useState(false);
 
   // Edit user state
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editUsername, setEditUsername] = useState("");
-  const [editPassword, setEditPassword] = useState("");
   const [editRole, setEditRole] = useState<"USER" | "ADMIN">("USER");
   const [savingEdit, setSavingEdit] = useState(false);
 
@@ -64,21 +71,23 @@ export default function UserManagement({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          username: newUsername.trim(),
-          password: newPassword,
+          email: newEmail.trim(),
+          username: newUsername.trim() || undefined,
           role: newRole,
         }),
       });
       const data = await res.json();
       if (!res.ok) {
-        toast.error(data.error || "Không thể tạo người dùng.");
+        toast.error(data.error || "Không thể thêm tài khoản.");
         return;
       }
-      setUsers((prev) => [data.user, ...prev]);
+      const nextUsers = [data.user, ...users];
+      setUsers(nextUsers);
+      onUserCountChange?.(nextUsers.length);
+      setNewEmail("");
       setNewUsername("");
-      setNewPassword("");
       setNewRole("USER");
-      toast.success(`Đã tạo tài khoản "${data.user.username}".`);
+      toast.success(`Đã thêm Gmail "${data.user.email}".`);
     } catch {
       toast.error("Không thể kết nối máy chủ.");
     } finally {
@@ -89,13 +98,12 @@ export default function UserManagement({
   function startEdit(user: AdminUserItem) {
     setEditingId(user.id);
     setEditUsername(user.username);
-    setEditPassword("");
     setEditRole(user.role === "ADMIN" ? "ADMIN" : "USER");
   }
 
   async function saveEdit(userId: string) {
     if (!editUsername.trim()) {
-      toast.error("Tên đăng nhập không được để trống.");
+      toast.error("Tên hiển thị không được để trống.");
       return;
     }
     setSavingEdit(true);
@@ -105,7 +113,6 @@ export default function UserManagement({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           username: editUsername.trim(),
-          password: editPassword || undefined,
           role: editRole,
         }),
       });
@@ -159,7 +166,7 @@ export default function UserManagement({
 
   return (
     <div className="animate-fade-up grid gap-8 lg:grid-cols-12">
-      {/* Create User Form */}
+      {/* Pre-register / Invite by Gmail */}
       <section className="lg:col-span-4">
         <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-xs">
           <div className="mb-5 flex items-center gap-3">
@@ -168,10 +175,10 @@ export default function UserManagement({
             </div>
             <div>
               <h2 className="text-base font-semibold text-slate-900">
-                Tạo tài khoản mới
+                Thêm bằng Email Google
               </h2>
               <p className="text-xs text-slate-500">
-                Cấp tài khoản học viên hoặc quản trị viên
+                Cấp sẵn quyền (USER / ADMIN) theo Gmail
               </p>
             </div>
           </div>
@@ -179,31 +186,29 @@ export default function UserManagement({
           <form onSubmit={handleCreateUser} className="space-y-4">
             <div>
               <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                Tên đăng nhập <span className="text-rose-500">*</span>
+                Địa chỉ Gmail / Google <span className="text-rose-500">*</span>
               </label>
               <input
-                type="text"
+                type="email"
                 required
-                minLength={3}
-                maxLength={32}
-                value={newUsername}
-                onChange={(e) => setNewUsername(e.target.value)}
-                placeholder="vd: hocvien01"
+                value={newEmail}
+                onChange={(e) => setNewEmail(e.target.value)}
+                placeholder="vd: banbe@gmail.com"
                 className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-sm outline-none transition focus:border-teal-600 focus:bg-white focus:ring-2 focus:ring-teal-600/15"
               />
             </div>
 
             <div>
               <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                Mật khẩu <span className="text-rose-500">*</span>
+                Tên hiển thị (tùy chọn)
               </label>
               <input
-                type="password"
-                required
-                minLength={6}
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Tối thiểu 6 ký tự"
+                type="text"
+                minLength={3}
+                maxLength={32}
+                value={newUsername}
+                onChange={(e) => setNewUsername(e.target.value)}
+                placeholder="Tự lấy từ Gmail nếu để trống"
                 className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-sm outline-none transition focus:border-teal-600 focus:bg-white focus:ring-2 focus:ring-teal-600/15"
               />
             </div>
@@ -234,7 +239,7 @@ export default function UserManagement({
               ) : (
                 <UserPlus className="h-4 w-4" />
               )}
-              <span>Tạo tài khoản</span>
+              <span>Thêm người dùng Google</span>
             </button>
           </form>
         </div>
@@ -259,27 +264,15 @@ export default function UserManagement({
                 <div key={user.id} className="py-4 first:pt-0 last:pb-0">
                   {isEditing ? (
                     <div className="space-y-3 rounded-xl border border-teal-200 bg-teal-50/40 p-4">
-                      <div className="grid gap-3 sm:grid-cols-3">
+                      <div className="grid gap-3 sm:grid-cols-2">
                         <div>
                           <label className="mb-1 block text-[11px] font-medium text-slate-600">
-                            Tên đăng nhập
+                            Tên hiển thị
                           </label>
                           <input
                             type="text"
                             value={editUsername}
                             onChange={(e) => setEditUsername(e.target.value)}
-                            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm outline-none focus:border-teal-600"
-                          />
-                        </div>
-                        <div>
-                          <label className="mb-1 block text-[11px] font-medium text-slate-600">
-                            Mật khẩu mới (tùy chọn)
-                          </label>
-                          <input
-                            type="password"
-                            value={editPassword}
-                            onChange={(e) => setEditPassword(e.target.value)}
-                            placeholder="Để trống nếu giữ nguyên"
                             className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm outline-none focus:border-teal-600"
                           />
                         </div>
@@ -351,6 +344,17 @@ export default function UserManagement({
                               USER
                             </span>
                           )}
+                          {user.hasGoogle ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 border border-emerald-200/80">
+                              <CheckCircle2 className="h-3 w-3" />
+                              Google
+                            </span>
+                          ) : user.hasPassword ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-800 border border-amber-200/80">
+                              <KeyRound className="h-3 w-3" />
+                              Chờ liên kết Google
+                            </span>
+                          ) : null}
                           {user.isBanned && (
                             <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2.5 py-0.5 text-[11px] font-semibold text-rose-700 border border-rose-200/70">
                               <Ban className="h-3 w-3" />
@@ -359,6 +363,15 @@ export default function UserManagement({
                           )}
                         </div>
                         <div className="mt-1 flex flex-wrap items-center gap-2.5 text-xs text-slate-500">
+                          {user.email && (
+                            <>
+                              <span className="inline-flex items-center gap-1">
+                                <Mail className="h-3 w-3 text-slate-400" />
+                                {user.email}
+                              </span>
+                              <span>•</span>
+                            </>
+                          )}
                           <span>{user._count.notes} ghi chú</span>
                           <span>•</span>
                           <span>

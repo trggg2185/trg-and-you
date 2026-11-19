@@ -221,3 +221,45 @@ export async function splitAudioIntoChunks(
 
   return { totalDurationSec, chunks };
 }
+
+/**
+ * Captures a single lightweight JPEG thumbnail from a video file using ffmpeg-static.
+ * Falls back to timestamp 0 if the requested offset produces no frame (e.g. very short clip).
+ */
+export async function captureVideoThumbnail(
+  inputVideoPath: string,
+  outputJpgPath: string,
+  timestampSec = 1.5
+): Promise<void> {
+  if (!ffmpegPath) {
+    throw new Error("ffmpeg binary path is not available");
+  }
+
+  const runCapture = async (ss: number) => {
+    await execFileAsync(
+      ffmpegPath!,
+      [
+        "-y",
+        "-hide_banner",
+        "-ss",
+        String(ss),
+        "-i",
+        inputVideoPath,
+        "-vframes",
+        "1",
+        "-vf",
+        "scale='min(640,iw)':-2",
+        "-q:v",
+        "5",
+        outputJpgPath,
+      ],
+      { maxBuffer: 5 * 1024 * 1024 }
+    );
+  };
+
+  try {
+    await runCapture(timestampSec);
+  } catch {
+    await runCapture(0);
+  }
+}
