@@ -175,7 +175,7 @@ export default function LessonLibrary({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Tìm bài học..."
-              className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-9 text-sm text-slate-800 shadow-2xs outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15"
+              className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-9 text-base sm:text-sm text-slate-800 shadow-2xs outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15"
             />
             {query && (
               <button

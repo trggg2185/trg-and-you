@@ -6,8 +6,8 @@
     "seed": "tsx prisma/seed.ts"
   },
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "dev": "node scripts/ensure-prisma.mjs && next dev",
+    "build": "node scripts/ensure-prisma.mjs && next build",
     "start": "next start",
     "lint": "eslint"
   },

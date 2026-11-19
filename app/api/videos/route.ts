@@ -5,13 +5,10 @@ import { prisma } from "@/lib/prisma";
 export async function GET(request: NextRequest) {
   try {
     const session = await getSession();
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
 
     const includeAll =
       request.nextUrl.searchParams.get("all") === "1" &&
-      session.role === "ADMIN";
+      session?.role === "ADMIN";
 
     const videos = await prisma.video.findMany({
       where: includeAll ? undefined : { status: "READY" },

@@ -9,9 +9,6 @@ export async function GET(
 ) {
   try {
     const session = await getSession();
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
 
     const { videoId } = await context.params;
     const video = await prisma.video.findUnique({
@@ -23,21 +20,23 @@ export async function GET(
       },
     });
 
-    if (!video) {
+    if (!video || (video.status !== "READY" && session?.role !== "ADMIN")) {
       return NextResponse.json(
         { error: "Không tìm thấy video." },
         { status: 404 }
       );
     }
 
-    const note = await prisma.note.findUnique({
-      where: {
-        userId_videoId: {
-          userId: session.userId,
-          videoId,
-        },
-      },
-    });
+    const note = session
+      ? await prisma.note.findUnique({
+          where: {
+            userId_videoId: {
+              userId: session.userId,
+              videoId,
+            },
+          },
+        })
+      : null;
 
     return NextResponse.json({
       video,

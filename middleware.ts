@@ -1,14 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth";
+import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/jwt";
 
-const PUBLIC_PATHS = [
+const PUBLIC_EXACT_PATHS = new Set([
+  "/",
   "/login",
   "/api/auth/login",
   "/api/auth/register",
   "/api/auth/logout",
-];
+  "/api/auth/me",
+]);
 
-function isPublicPath(pathname: string): boolean {
+function isPublicPath(pathname: string, method: string): boolean {
   if (
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon.ico") ||
@@ -16,11 +18,25 @@ function isPublicPath(pathname: string): boolean {
   ) {
     return true;
   }
-  return PUBLIC_PATHS.some((path) => pathname === path);
+  if (PUBLIC_EXACT_PATHS.has(pathname)) {
+    return true;
+  }
+  if (pathname.startsWith("/learn/")) {
+    return true;
+  }
+  if (
+    method === "GET" &&
+    (pathname === "/api/videos" ||
+      (/^\/api\/videos\/[^/]+$/.test(pathname)))
+  ) {
+    return true;
+  }
+  return false;
 }
 
 function isAdminOnlyPath(pathname: string, method: string): boolean {
   if (pathname.startsWith("/admin")) return true;
+  if (pathname.startsWith("/api/admin")) return true;
   if (pathname.startsWith("/api/upload")) return true;
   if (pathname.startsWith("/api/videos/process")) return true;
   if (pathname.startsWith("/api/videos/") && pathname.endsWith("/reprocess")) {
@@ -41,8 +57,7 @@ function isAdminOnlyPath(pathname: string, method: string): boolean {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (isPublicPath(pathname)) {
-    // If already logged in and visiting /login, redirect to home
+  if (isPublicPath(pathname, request.method)) {
     if (pathname === "/login") {
       const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
       if (token) {
@@ -62,7 +77,7 @@ export async function middleware(request: NextRequest) {
     if (pathname.startsWith("/api/")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    return NextResponse.redirect(new URL("/login", request.url));
+    return NextResponse.redirect(new URL("/", request.url));
   }
 
   if (isAdminOnlyPath(pathname, request.method) && session.role !== "ADMIN") {

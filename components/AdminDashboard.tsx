@@ -16,10 +16,12 @@ import {
   Sparkles,
   Trash2,
   UploadCloud,
+  Users,
   X,
 } from "lucide-react";
 import { useToast } from "@/components/ToastProvider";
 import ConfirmModal from "@/components/ConfirmModal";
+import UserManagement, { type AdminUserItem } from "@/components/UserManagement";
 
 export interface AdminVideoItem {
   id: string;
@@ -36,6 +38,8 @@ export interface AdminVideoItem {
 
 interface AdminDashboardProps {
   initialVideos: AdminVideoItem[];
+  initialUsers: AdminUserItem[];
+  currentAdminId: string;
 }
 
 function uploadFileWithProgress(
@@ -71,8 +75,13 @@ function uploadFileWithProgress(
   });
 }
 
-export default function AdminDashboard({ initialVideos }: AdminDashboardProps) {
+export default function AdminDashboard({
+  initialVideos,
+  initialUsers,
+  currentAdminId,
+}: AdminDashboardProps) {
   const toast = useToast();
+  const [activeTab, setActiveTab] = useState<"videos" | "users">("videos");
   const [videos, setVideos] = useState<AdminVideoItem[]>(initialVideos);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -256,7 +265,42 @@ export default function AdminDashboard({ initialVideos }: AdminDashboardProps) {
   }
 
   return (
-    <div className="animate-fade-up grid gap-8 lg:grid-cols-12">
+    <div className="space-y-6">
+      {/* Tab Switcher */}
+      <div className="grid grid-cols-2 w-full sm:w-auto sm:inline-flex rounded-2xl border border-slate-200 bg-white p-1 shadow-2xs">
+        <button
+          type="button"
+          onClick={() => setActiveTab("videos")}
+          className={`inline-flex items-center justify-center gap-1.5 sm:gap-2 rounded-xl px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold transition cursor-pointer ${
+            activeTab === "videos"
+              ? "bg-teal-700 text-white shadow-xs"
+              : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+          }`}
+        >
+          <Film className="h-4 w-4 shrink-0" />
+          <span className="truncate">Bài học ({videos.length})</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("users")}
+          className={`inline-flex items-center justify-center gap-1.5 sm:gap-2 rounded-xl px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold transition cursor-pointer ${
+            activeTab === "users"
+              ? "bg-teal-700 text-white shadow-xs"
+              : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+          }`}
+        >
+          <Users className="h-4 w-4 shrink-0" />
+          <span className="truncate">Người dùng ({initialUsers.length})</span>
+        </button>
+      </div>
+
+      {activeTab === "users" ? (
+        <UserManagement
+          initialUsers={initialUsers}
+          currentAdminId={currentAdminId}
+        />
+      ) : (
+        <div className="animate-fade-up grid gap-8 lg:grid-cols-12">
       {/* Upload & AI Processing Form */}
       <section className="lg:col-span-5">
         <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-xs">
@@ -286,7 +330,7 @@ export default function AdminDashboard({ initialVideos }: AdminDashboardProps) {
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="vd: Peppa Pig - At the Supermarket"
-                className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-sm outline-none transition focus:border-teal-600 focus:bg-white focus:ring-2 focus:ring-teal-600/15 disabled:bg-slate-100"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-base sm:text-sm outline-none transition focus:border-teal-600 focus:bg-white focus:ring-2 focus:ring-teal-600/15 disabled:bg-slate-100"
               />
             </div>
 
@@ -300,7 +344,7 @@ export default function AdminDashboard({ initialVideos }: AdminDashboardProps) {
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Chủ đề giao tiếp, mẫu câu nổi bật..."
-                className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2 text-sm outline-none transition focus:border-teal-600 focus:bg-white focus:ring-2 focus:ring-teal-600/15 disabled:bg-slate-100"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2 text-base sm:text-sm outline-none transition focus:border-teal-600 focus:bg-white focus:ring-2 focus:ring-teal-600/15 disabled:bg-slate-100"
               />
             </div>
 
@@ -526,6 +570,8 @@ export default function AdminDashboard({ initialVideos }: AdminDashboardProps) {
         onConfirm={() => void confirmDelete()}
         onCancel={() => setDeleteTarget(null)}
       />
+        </div>
+      )}
     </div>
   );
 }

@@ -14,10 +14,6 @@ export default async function LearnVideoPage({
   params: Promise<{ videoId: string }>;
 }) {
   const session = await getSession();
-  if (!session) {
-    redirect("/login");
-  }
-
   const { videoId } = await params;
 
   const video = await prisma.video.findUnique({
@@ -33,22 +29,27 @@ export default async function LearnVideoPage({
     notFound();
   }
 
-  if (video.status !== "READY" && session.role !== "ADMIN") {
+  if (video.status !== "READY" && session?.role !== "ADMIN") {
     redirect("/");
   }
 
-  const note = await prisma.note.findUnique({
-    where: {
-      userId_videoId: {
-        userId: session.userId,
-        videoId,
-      },
-    },
-  });
+  const note = session
+    ? await prisma.note.findUnique({
+        where: {
+          userId_videoId: {
+            userId: session.userId,
+            videoId,
+          },
+        },
+      })
+    : null;
 
   return (
     <div className="min-h-screen flex flex-col bg-[#f6f7f5]">
-      <Navbar username={session.username} role={session.role} />
+      <Navbar
+        username={session?.username ?? null}
+        role={session?.role ?? null}
+      />
 
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-5 sm:px-6 lg:px-8">
         <div className="mb-4">
@@ -68,6 +69,7 @@ export default async function LearnVideoPage({
           videoUrl={video.videoUrl}
           subtitles={video.subtitles}
           initialNote={note?.content ?? ""}
+          isLoggedIn={Boolean(session)}
         />
       </main>
     </div>

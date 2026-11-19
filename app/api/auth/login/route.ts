@@ -33,6 +33,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (user.isBanned) {
+      return NextResponse.json(
+        {
+          error:
+            "Tài khoản của bạn đã bị khóa bởi quản trị viên. Không thể đăng nhập.",
+        },
+        { status: 403 }
+      );
+    }
+
     const role = user.role === "ADMIN" ? "ADMIN" : "USER";
     const token = await signSessionToken({
       userId: user.id,

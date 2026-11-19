@@ -4,6 +4,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -34,6 +35,7 @@ const ToastContext = createContext<ToastContextValue | null>(null);
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const lastToastRef = useRef<{ key: string; at: number } | null>(null);
 
   const dismiss = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
@@ -51,7 +53,18 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       title?: string;
       duration?: number;
     }) => {
-      const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const dedupeKey = `${type}:${title ?? ""}:${message}`;
+      const now = Date.now();
+      if (
+        lastToastRef.current &&
+        lastToastRef.current.key === dedupeKey &&
+        now - lastToastRef.current.at < 350
+      ) {
+        return;
+      }
+      lastToastRef.current = { key: dedupeKey, at: now };
+
+      const id = `${now}-${Math.random().toString(36).slice(2, 8)}`;
       setToasts((prev) => [...prev.slice(-4), { id, type, title, message }]);
 
       if (duration > 0) {
@@ -86,7 +99,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {/* Toast Container (slides in from right to left) */}
       <div
         aria-live="polite"
-        className="pointer-events-none fixed right-4 top-4 z-50 flex w-full max-w-sm flex-col gap-2.5 sm:right-6 sm:top-6"
+        className="pointer-events-none fixed inset-x-3 top-3 z-50 flex flex-col gap-2.5 sm:inset-x-auto sm:right-6 sm:top-6 sm:w-full sm:max-w-sm"
       >
         {toasts.map((toast) => {
           const styles =

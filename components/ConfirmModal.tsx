@@ -97,12 +97,12 @@ export default function ConfirmModal({
           </div>
         </div>
 
-        <div className="mt-6 flex items-center justify-end gap-2.5">
+        <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end sm:gap-2.5">
           <button
             type="button"
             disabled={loading}
             onClick={onCancel}
-            className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 cursor-pointer"
+            className="w-full sm:w-auto rounded-xl border border-slate-200 bg-white px-4 py-2.5 sm:py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 cursor-pointer"
           >
             {cancelText}
           </button>
@@ -110,7 +110,7 @@ export default function ConfirmModal({
             type="button"
             disabled={loading}
             onClick={onConfirm}
-            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white shadow-xs transition disabled:opacity-60 cursor-pointer ${
+            className={`inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-xl px-4 py-2.5 sm:py-2 text-sm font-semibold text-white shadow-xs transition disabled:opacity-60 cursor-pointer ${
               isDanger
                 ? "bg-rose-600 hover:bg-rose-700"
                 : "bg-teal-700 hover:bg-teal-800"

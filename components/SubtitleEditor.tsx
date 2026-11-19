@@ -367,19 +367,18 @@ export default function SubtitleEditor({
         {/* Left: Sticky Video Player + Timing Tools */}
         <div className="lg:col-span-5">
           <div className="space-y-4 lg:sticky lg:top-20">
-            <div className="overflow-hidden rounded-2xl border border-slate-200/90 bg-slate-950 shadow-sm">
-              <video
-                ref={videoRef}
-                src={videoUrl}
-                controls
-                preload="auto"
-                playsInline
-                onPlay={() => {
-                  // Clear segment stop if user manually presses native play
-                }}
-                onTimeUpdate={handleTimeUpdate}
-                className="aspect-video w-full bg-slate-950"
-              />
+            <div className="sticky top-14 z-20 -mx-4 bg-[#f6f7f5] px-4 pb-1 sm:static sm:mx-0 sm:bg-transparent sm:px-0 sm:pb-0">
+              <div className="overflow-hidden rounded-2xl border border-slate-200/90 bg-slate-950 shadow-sm">
+                <video
+                  ref={videoRef}
+                  src={videoUrl}
+                  controls
+                  preload="auto"
+                  playsInline
+                  onTimeUpdate={handleTimeUpdate}
+                  className="aspect-video w-full bg-slate-950"
+                />
+              </div>
             </div>
 
             <div className="rounded-2xl border border-slate-200/90 bg-white p-4 shadow-xs space-y-4">
