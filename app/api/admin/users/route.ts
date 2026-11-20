@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
+import { getSession, isAdminRole, isSuperAdminRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export async function GET() {
   try {
     const session = await getSession();
-    if (!session || session.role !== "ADMIN") {
+    if (!session || !isAdminRole(session.role)) {
       return NextResponse.json(
         { error: "Bạn không có quyền truy cập." },
         { status: 403 }
@@ -18,13 +18,20 @@ export async function GET() {
         id: true,
         username: true,
         email: true,
+        avatarUrl: true,
         googleId: true,
         passwordHash: true,
         role: true,
         isBanned: true,
         createdAt: true,
         _count: {
-          select: { notes: true },
+          select: {
+            notes: true,
+            sharedNotes: true,
+            progresses: true,
+            vocabItems: true,
+            savedSentences: true,
+          },
         },
       },
     });
@@ -33,6 +40,7 @@ export async function GET() {
       id: u.id,
       username: u.username,
       email: u.email,
+      avatarUrl: u.avatarUrl,
       hasGoogle: Boolean(u.googleId),
       hasPassword: Boolean(u.passwordHash),
       role: u.role,
@@ -54,7 +62,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const session = await getSession();
-    if (!session || session.role !== "ADMIN") {
+    if (!session || !isAdminRole(session.role)) {
       return NextResponse.json(
         { error: "Bạn không có quyền thực hiện thao tác này." },
         { status: 403 }
@@ -66,7 +74,17 @@ export async function POST(request: NextRequest) {
       typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
     const rawUsername =
       typeof body.username === "string" ? body.username.trim() : "";
-    const role = body.role === "ADMIN" ? "ADMIN" : "USER";
+    const requestedRole = body.role === "ADMIN" ? "ADMIN" : "USER";
+
+    if (requestedRole === "ADMIN" && !isSuperAdminRole(session.role)) {
+      return NextResponse.json(
+        {
+          error:
+            "Chỉ SuperAdmin mới có quyền thêm tài khoản Quản trị viên (ADMIN).",
+        },
+        { status: 403 }
+      );
+    }
 
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return NextResponse.json(
@@ -118,20 +136,27 @@ export async function POST(request: NextRequest) {
         username,
         email,
         passwordHash: null,
-        role,
+        role: requestedRole,
         isBanned: false,
       },
       select: {
         id: true,
         username: true,
         email: true,
+        avatarUrl: true,
         googleId: true,
         passwordHash: true,
         role: true,
         isBanned: true,
         createdAt: true,
         _count: {
-          select: { notes: true },
+          select: {
+            notes: true,
+            sharedNotes: true,
+            progresses: true,
+            vocabItems: true,
+            savedSentences: true,
+          },
         },
       },
     });
@@ -142,6 +167,7 @@ export async function POST(request: NextRequest) {
           id: created.id,
           username: created.username,
           email: created.email,
+          avatarUrl: created.avatarUrl,
           hasGoogle: Boolean(created.googleId),
           hasPassword: Boolean(created.passwordHash),
           role: created.role,

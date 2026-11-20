@@ -24,6 +24,7 @@ import {
   parseTagsList,
 } from "@/lib/lessonMeta";
 import type { StudySummary } from "@/lib/stats";
+import DailyGoalControl from "@/components/DailyGoalControl";
 
 const emptySubscribe = () => () => {};
 
@@ -297,6 +298,14 @@ export default function LessonLibrary({
   const [levelFilter, setLevelFilter] = useState<string>("ALL");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
 
+  const propGoal = studySummary?.dailyGoalMinutes ?? 15;
+  const [prevPropGoal, setPrevPropGoal] = useState(propGoal);
+  const [goalMinutes, setGoalMinutes] = useState(propGoal);
+  if (propGoal !== prevPropGoal) {
+    setPrevPropGoal(propGoal);
+    setGoalMinutes(propGoal);
+  }
+
   const localMapJson = useSyncExternalStore(
     emptySubscribe,
     () => {
@@ -376,35 +385,85 @@ export default function LessonLibrary({
       {/* Daily Streak & Study Summary Banner (authenticated users) */}
       {studySummary && (
         <div className="mb-6 grid gap-3 sm:grid-cols-3">
-          <div className="flex items-center gap-3 rounded-2xl border border-amber-200/80 bg-white px-4 py-3 shadow-2xs">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
-              <Flame className="h-5 w-5" />
+          <Link
+            href="/account#study-heatmap"
+            className="group flex items-center justify-between gap-3 rounded-2xl border border-amber-200/80 bg-white px-4 py-3 shadow-2xs transition hover:border-amber-300 hover:bg-amber-50/30"
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+                <Flame className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-[11px] font-medium text-slate-500">
+                  Chuỗi ngày học liên tiếp
+                </p>
+                <p className="text-base font-bold text-slate-900">
+                  {studySummary.streakDays} ngày
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-[11px] font-medium text-slate-500">
-                Chuỗi ngày học liên tiếp
-              </p>
-              <p className="text-base font-bold text-slate-900">
-                {studySummary.streakDays} ngày
-              </p>
-            </div>
-          </div>
+            <span className="text-[11px] font-semibold text-slate-400 transition group-hover:text-teal-700">
+              Biểu đồ →
+            </span>
+          </Link>
 
-          <div className="flex items-center gap-3 rounded-2xl border border-teal-200/80 bg-white px-4 py-3 shadow-2xs">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-700">
-              <Clock className="h-5 w-5" />
+          <div className="flex flex-col justify-center gap-1.5 rounded-2xl border border-teal-200/80 bg-white px-4 py-3 shadow-2xs">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-700">
+                  <Clock className="h-5 w-5" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[11px] font-medium text-slate-500">
+                    Hôm nay · Mục tiêu {goalMinutes}p
+                  </p>
+                  <p className="text-sm sm:text-base font-bold text-slate-900 truncate">
+                    {formatStudyMinutes(studySummary.todaySeconds)} ·{" "}
+                    <span className="font-semibold text-teal-700">
+                      Tổng {formatStudyMinutes(studySummary.totalSeconds)}
+                    </span>
+                  </p>
+                </div>
+              </div>
+              <Link
+                href="/account#study-heatmap"
+                title="Xem chi tiết thống kê & biểu đồ"
+                className="shrink-0 rounded-lg p-1 text-slate-400 transition hover:bg-teal-50 hover:text-teal-700"
+              >
+                <ArrowUpRight className="h-4 w-4" />
+              </Link>
             </div>
-            <div>
-              <p className="text-[11px] font-medium text-slate-500">
-                Hôm nay · Tổng tích lũy
-              </p>
-              <p className="text-base font-bold text-slate-900">
-                {formatStudyMinutes(studySummary.todaySeconds)} ·{" "}
-                <span className="font-semibold text-teal-700">
-                  {formatStudyMinutes(studySummary.totalSeconds)}
-                </span>
-              </p>
-            </div>
+
+            {(() => {
+              const goalPct = Math.min(
+                100,
+                Math.round(
+                  (studySummary.todaySeconds /
+                    Math.max(1, goalMinutes * 60)) *
+                    100
+                )
+              );
+              return (
+                <div className="flex items-center gap-2">
+                  <div className="h-1.5 min-w-6 flex-1 overflow-hidden rounded-full bg-slate-100">
+                    <div
+                      className={`h-full transition-all ${
+                        goalPct >= 100 ? "bg-emerald-500" : "bg-teal-600"
+                      }`}
+                      style={{ width: `${goalPct}%` }}
+                    />
+                  </div>
+                  <span className="shrink-0 text-[10px] font-bold text-teal-800">
+                    {goalPct}%
+                  </span>
+                  <DailyGoalControl
+                    currentMinutes={goalMinutes}
+                    todaySeconds={studySummary.todaySeconds}
+                    onUpdated={setGoalMinutes}
+                  />
+                </div>
+              );
+            })()}
           </div>
 
           <Link

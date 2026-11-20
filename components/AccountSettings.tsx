@@ -6,29 +6,36 @@ import {
   AlertTriangle,
   BadgeCheck,
   CheckCircle2,
+  Crown,
   Link2,
   Loader2,
   Mail,
   Save,
   Shield,
-  UserCog,
+  Target,
 } from "lucide-react";
 import { useToast } from "@/components/ToastProvider";
 import ConfirmModal from "@/components/ConfirmModal";
+import UserAvatar from "@/components/UserAvatar";
+import type { UserRole } from "@/lib/jwt";
 
 interface AccountSettingsProps {
   initialUsername: string;
+  initialDailyGoalMinutes: number;
   email?: string | null;
   avatarUrl?: string | null;
   hasGoogle: boolean;
   hasPassword: boolean;
-  role: "ADMIN" | "USER";
+  role: UserRole;
   createdAt: string;
   noteCount: number;
 }
 
+const GOAL_PRESETS = [5, 10, 15, 20, 30, 45, 60];
+
 export default function AccountSettings({
   initialUsername,
+  initialDailyGoalMinutes,
   email = null,
   avatarUrl = null,
   hasGoogle,
@@ -42,20 +49,51 @@ export default function AccountSettings({
 
   const [username, setUsername] = useState(initialUsername);
   const [savedUsername, setSavedUsername] = useState(initialUsername);
+  const [prevGoalProp, setPrevGoalProp] = useState(initialDailyGoalMinutes);
+  const [goalInput, setGoalInput] = useState(String(initialDailyGoalMinutes));
+  const [savedGoal, setSavedGoal] = useState(initialDailyGoalMinutes);
+  if (initialDailyGoalMinutes !== prevGoalProp) {
+    setPrevGoalProp(initialDailyGoalMinutes);
+    setGoalInput(String(initialDailyGoalMinutes));
+    setSavedGoal(initialDailyGoalMinutes);
+  }
   const [saving, setSaving] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
+  const parsedGoal = Number(goalInput);
+  const validGoal =
+    goalInput.trim() !== "" &&
+    Number.isFinite(parsedGoal) &&
+    parsedGoal >= 5 &&
+    parsedGoal <= 180
+      ? Math.round(parsedGoal)
+      : null;
+
   function handlePreSubmit(e: FormEvent) {
     e.preventDefault();
-    const trimmedUser = username.trim();
-    if (trimmedUser === savedUsername) {
-      toast.info("Bạn chưa thay đổi tên hiển thị nào.");
+    if (validGoal === null) {
+      toast.error("Vui lòng nhập mục tiêu từ 5 đến 180 phút.");
       return;
     }
+
+    const trimmedUser = username.trim();
+    const usernameChanged = trimmedUser !== savedUsername;
+    const goalChanged = validGoal !== savedGoal;
+
+    if (!usernameChanged && !goalChanged) {
+      toast.info("Bạn chưa thay đổi thông tin nào.");
+      return;
+    }
+
+    if (!usernameChanged && goalChanged) {
+      void executeUpdate(validGoal);
+      return;
+    }
+
     setConfirmOpen(true);
   }
 
-  async function executeUpdate() {
+  async function executeUpdate(targetGoal = validGoal ?? savedGoal) {
     setSaving(true);
     try {
       const res = await fetch("/api/auth/profile", {
@@ -63,6 +101,7 @@ export default function AccountSettings({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           username: username.trim(),
+          dailyGoalMinutes: targetGoal,
         }),
       });
 
@@ -74,8 +113,12 @@ export default function AccountSettings({
 
       setSavedUsername(data.user.username);
       setUsername(data.user.username);
+      if (typeof data.user.dailyGoalMinutes === "number") {
+        setSavedGoal(data.user.dailyGoalMinutes);
+        setGoalInput(String(data.user.dailyGoalMinutes));
+      }
       setConfirmOpen(false);
-      toast.success("Tên hiển thị của bạn đã được cập nhật.");
+      toast.success("Thông tin và mục tiêu học tập đã được lưu.");
       router.refresh();
     } catch {
       toast.error("Không thể kết nối máy chủ. Vui lòng thử lại sau.");
@@ -90,25 +133,33 @@ export default function AccountSettings({
       <div className="lg:col-span-4">
         <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-xs">
           <div className="flex items-center gap-3.5">
-            {avatarUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={avatarUrl}
-                alt={savedUsername}
-                className="h-12 w-12 rounded-2xl border border-slate-200 object-cover"
-              />
-            ) : (
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-teal-50 text-teal-700">
-                <UserCog className="h-6 w-6" />
-              </div>
-            )}
+            <UserAvatar
+              src={avatarUrl}
+              name={savedUsername}
+              sizeClass="h-12 w-12"
+              textClass="text-base"
+            />
             <div className="min-w-0">
               <h2 className="truncate text-base font-bold text-slate-900">
                 {savedUsername}
               </h2>
-              <span className="mt-0.5 inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700">
-                <Shield className="h-3 w-3 text-teal-700" />
-                {role === "ADMIN" ? "Quản trị viên" : "Học viên"}
+              <span
+                className={`mt-0.5 inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                  role === "SUPERADMIN"
+                    ? "bg-amber-50 text-amber-800 border border-amber-200"
+                    : "bg-slate-100 text-slate-700"
+                }`}
+              >
+                {role === "SUPERADMIN" ? (
+                  <Crown className="h-3 w-3 text-amber-600" />
+                ) : (
+                  <Shield className="h-3 w-3 text-teal-700" />
+                )}
+                {role === "SUPERADMIN"
+                  ? "SuperAdmin"
+                  : role === "ADMIN"
+                  ? "Quản trị viên"
+                  : "Học viên"}
               </span>
             </div>
           </div>
@@ -222,6 +273,48 @@ export default function AccountSettings({
               </p>
             </div>
 
+            <div className="border-t border-slate-100 pt-5">
+              <label className="mb-2 flex items-center gap-1.5 text-sm font-medium text-slate-700">
+                <Target className="h-4 w-4 text-teal-700" />
+                <span>Mục tiêu học mỗi ngày (phút)</span>
+              </label>
+              <div className="flex flex-wrap items-center gap-2">
+                {GOAL_PRESETS.map((mins) => (
+                  <button
+                    key={mins}
+                    type="button"
+                    onClick={() => setGoalInput(String(mins))}
+                    className={`rounded-xl border px-3 py-1.5 text-xs font-semibold transition cursor-pointer ${
+                      validGoal === mins
+                        ? "border-teal-600 bg-teal-700 text-white shadow-xs"
+                        : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                    }`}
+                  >
+                    {mins} phút
+                  </button>
+                ))}
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="number"
+                    min={5}
+                    max={180}
+                    value={goalInput}
+                    onChange={(e) => setGoalInput(e.target.value)}
+                    onBlur={() => {
+                      if (validGoal !== null) {
+                        setGoalInput(String(validGoal));
+                      }
+                    }}
+                    className="w-20 rounded-xl border border-slate-200 bg-slate-50/50 px-2.5 py-1.5 text-center text-xs font-semibold text-slate-900 outline-none focus:border-teal-600 focus:bg-white"
+                  />
+                  <span className="text-xs text-slate-500">phút</span>
+                </div>
+              </div>
+              <p className="mt-1.5 text-xs text-slate-400">
+                Giúp theo dõi phần trăm hoàn thành mỗi ngày trên trang chủ &amp; bảng nhóm.
+              </p>
+            </div>
+
             <div className="flex justify-end border-t border-slate-100 pt-5">
               <button
                 type="submit"
@@ -236,7 +329,7 @@ export default function AccountSettings({
                 ) : (
                   <>
                     <Save className="h-4 w-4" />
-                    <span>Lưu tên hiển thị</span>
+                    <span>Lưu cài đặt</span>
                   </>
                 )}
               </button>

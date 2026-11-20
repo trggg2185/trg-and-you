@@ -11,6 +11,7 @@ import {
   ExternalLink,
   FileVideo,
   Film,
+  HardDrive,
   Languages,
   Loader2,
   Sparkles,
@@ -22,6 +23,8 @@ import {
 import { useToast } from "@/components/ToastProvider";
 import ConfirmModal from "@/components/ConfirmModal";
 import UserManagement, { type AdminUserItem } from "@/components/UserManagement";
+import R2CleanupTool from "@/components/R2CleanupTool";
+import type { UserRole } from "@/lib/jwt";
 import {
   LESSON_LEVELS,
   LEVEL_BADGE_STYLES,
@@ -48,6 +51,7 @@ interface AdminDashboardProps {
   initialVideos: AdminVideoItem[];
   initialUsers: AdminUserItem[];
   currentAdminId: string;
+  currentRole: UserRole;
 }
 
 function uploadFileWithProgress(
@@ -87,9 +91,12 @@ export default function AdminDashboard({
   initialVideos,
   initialUsers,
   currentAdminId,
+  currentRole,
 }: AdminDashboardProps) {
   const toast = useToast();
-  const [activeTab, setActiveTab] = useState<"videos" | "users">("videos");
+  const [activeTab, setActiveTab] = useState<"videos" | "users" | "storage">(
+    "videos"
+  );
   const [videos, setVideos] = useState<AdminVideoItem[]>(initialVideos);
   const [userCount, setUserCount] = useState(initialUsers.length);
   const [title, setTitle] = useState("");
@@ -290,11 +297,11 @@ export default function AdminDashboard({
   return (
     <div className="space-y-6">
       {/* Tab Switcher */}
-      <div className="grid grid-cols-2 w-full sm:w-auto sm:inline-flex rounded-2xl border border-slate-200 bg-white p-1 shadow-2xs">
+      <div className="grid grid-cols-3 w-full sm:w-auto sm:inline-flex rounded-2xl border border-slate-200 bg-white p-1 shadow-2xs">
         <button
           type="button"
           onClick={() => setActiveTab("videos")}
-          className={`inline-flex items-center justify-center gap-1.5 sm:gap-2 rounded-xl px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold transition cursor-pointer ${
+          className={`inline-flex items-center justify-center gap-1 sm:gap-2 rounded-xl px-2 sm:px-4 py-2 text-xs sm:text-sm font-semibold transition cursor-pointer ${
             activeTab === "videos"
               ? "bg-teal-700 text-white shadow-xs"
               : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
@@ -306,7 +313,7 @@ export default function AdminDashboard({
         <button
           type="button"
           onClick={() => setActiveTab("users")}
-          className={`inline-flex items-center justify-center gap-1.5 sm:gap-2 rounded-xl px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold transition cursor-pointer ${
+          className={`inline-flex items-center justify-center gap-1 sm:gap-2 rounded-xl px-2 sm:px-4 py-2 text-xs sm:text-sm font-semibold transition cursor-pointer ${
             activeTab === "users"
               ? "bg-teal-700 text-white shadow-xs"
               : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
@@ -315,18 +322,33 @@ export default function AdminDashboard({
           <Users className="h-4 w-4 shrink-0" />
           <span className="truncate">Người dùng ({userCount})</span>
         </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("storage")}
+          className={`inline-flex items-center justify-center gap-1 sm:gap-2 rounded-xl px-2 sm:px-4 py-2 text-xs sm:text-sm font-semibold transition cursor-pointer ${
+            activeTab === "storage"
+              ? "bg-teal-700 text-white shadow-xs"
+              : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+          }`}
+        >
+          <HardDrive className="h-4 w-4 shrink-0" />
+          <span className="truncate">Dọn R2</span>
+        </button>
       </div>
 
       {activeTab === "users" ? (
         <UserManagement
           initialUsers={initialUsers}
           currentAdminId={currentAdminId}
+          currentRole={currentRole}
           onUserCountChange={setUserCount}
         />
+      ) : activeTab === "storage" ? (
+        <R2CleanupTool currentRole={currentRole} />
       ) : (
         <div className="animate-fade-up grid gap-8 lg:grid-cols-12">
       {/* Upload & AI Processing Form */}
-      <section className="lg:col-span-5">
+      <section className="min-w-0 lg:col-span-5">
         <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-xs">
           <div className="mb-5 flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-50 text-teal-700">
@@ -417,7 +439,7 @@ export default function AdminDashboard({
                 accept=".mp4,.mkv,.webm,video/mp4,video/x-matroska,video/webm"
                 disabled={isBusy}
                 onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                className="block w-full cursor-pointer rounded-xl border border-dashed border-slate-300 bg-slate-50/70 px-3.5 py-3 text-sm text-slate-600 transition hover:border-teal-400 file:mr-3 file:rounded-lg file:border-0 file:bg-teal-700 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white hover:file:bg-teal-800 disabled:opacity-50"
+                className="block w-full min-w-0 max-w-full overflow-hidden cursor-pointer rounded-xl border border-dashed border-slate-300 bg-slate-50/70 px-3 py-3 text-xs sm:text-sm text-slate-600 transition hover:border-teal-400 file:mr-2.5 file:rounded-lg file:border-0 file:bg-teal-700 file:px-2.5 file:py-1.5 file:text-xs file:font-semibold file:text-white hover:file:bg-teal-800 disabled:opacity-50"
               />
               {file && (
                 <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
@@ -480,7 +502,7 @@ export default function AdminDashboard({
       </section>
 
       {/* Uploaded Videos List */}
-      <section className="lg:col-span-7">
+      <section className="min-w-0 lg:col-span-7">
         <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-xs">
           <div className="mb-5 flex items-center justify-between">
             <div className="flex items-center gap-2">

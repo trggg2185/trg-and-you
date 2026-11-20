@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/jwt";
+import {
+  isAdminRole,
+  SESSION_COOKIE_NAME,
+  verifySessionToken,
+} from "@/lib/jwt";
 
 const PUBLIC_EXACT_PATHS = new Set([
   "/",
@@ -76,7 +80,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/", request.url));
   }
 
-  if (isAdminOnlyPath(pathname, request.method) && session.role !== "ADMIN") {
+  if (isAdminOnlyPath(pathname, request.method) && !isAdminRole(session.role)) {
     if (pathname.startsWith("/api/")) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }

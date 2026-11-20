@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+import { getSession, isAdminRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getStudySummary } from "@/lib/stats";
 import Navbar from "@/components/Navbar";
@@ -70,12 +70,13 @@ export default async function HomePage() {
       <Navbar
         username={session?.username ?? null}
         role={session?.role ?? null}
+        avatarUrl={session?.avatarUrl ?? null}
       />
 
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8">
         <LessonLibrary
           videos={serialized}
-          isAdmin={session?.role === "ADMIN"}
+          isAdmin={isAdminRole(session?.role)}
           studySummary={studySummary}
           dueVocabCount={dueVocabCount}
         />

@@ -47,6 +47,7 @@ import {
     triggerTextDownload,
 } from "@/lib/export";
 import { LEVEL_BADGE_STYLES, parseTagsList } from "@/lib/lessonMeta";
+import type { UserRole } from "@/lib/jwt";
 
 export interface SubtitleItem {
     id: string;
@@ -73,6 +74,7 @@ interface ShadowingStudioProps {
     isLoggedIn: boolean;
     currentUserId?: string | null;
     isAdmin?: boolean;
+    currentUserRole?: UserRole | null;
 }
 
 function formatTime(seconds: number): string {
@@ -118,6 +120,7 @@ export default function ShadowingStudio({
     isLoggedIn,
     currentUserId = null,
     isAdmin = false,
+    currentUserRole = null,
 }: ShadowingStudioProps) {
     const toast = useToast();
     const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -1236,7 +1239,7 @@ export default function ShadowingStudio({
                                     }`}
                                 >
                                     <Users className="h-3.5 w-3.5" />
-                                    <span>Ghi chú nhóm</span>
+                                    <span>Ghi chú &amp; Bình luận</span>
                                 </button>
                             </div>
 
@@ -1299,6 +1302,7 @@ export default function ShadowingStudio({
                                 }
                                 isAuthenticated={isLoggedIn}
                                 currentUserId={currentUserId}
+                                currentUserRole={currentUserRole}
                                 isAdmin={isAdmin}
                                 onJumpToTime={seekAndPlay}
                                 onRequireAuth={() => setAuthModalOpen(true)}
@@ -1420,7 +1424,9 @@ export default function ShadowingStudio({
                                         ) : (
                                             <>
                                                 <CaptionsOff className="h-3.5 w-3.5" />
-                                                <span>Hiện sub</span>
+                                                <span className="hidden sm:inline">
+                                                    Hiện sub
+                                                </span>
                                             </>
                                         )}
                                     </button>
@@ -1429,6 +1435,16 @@ export default function ShadowingStudio({
                                         <button
                                             type="button"
                                             onClick={() => setShowIpa((prev) => !prev)}
+                                            title={
+                                                showIpa
+                                                    ? "Ẩn phiên âm IPA"
+                                                    : "Hiện phiên âm IPA"
+                                            }
+                                            aria-label={
+                                                showIpa
+                                                    ? "Ẩn phiên âm IPA"
+                                                    : "Hiện phiên âm IPA"
+                                            }
                                             className={`inline-flex items-center gap-1 rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition cursor-pointer ${
                                                 showIpa
                                                     ? "border-teal-200 bg-teal-50 text-teal-800"
@@ -1438,12 +1454,16 @@ export default function ShadowingStudio({
                                             {showIpa ? (
                                                 <>
                                                     <Eye className="h-3.5 w-3.5" />
-                                                    <span>Ẩn IPA</span>
+                                                    <span className="hidden sm:inline">
+                                                        Ẩn IPA
+                                                    </span>
                                                 </>
                                             ) : (
                                                 <>
                                                     <EyeOff className="h-3.5 w-3.5" />
-                                                    <span>Hiện IPA</span>
+                                                    <span className="hidden sm:inline">
+                                                        Hiện IPA
+                                                    </span>
                                                 </>
                                             )}
                                         </button>

@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession, SESSION_COOKIE_NAME, signSessionToken } from "@/lib/auth";
+import {
+  getSession,
+  normalizeUserRole,
+  SESSION_COOKIE_NAME,
+  signSessionToken,
+} from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import {
   exchangeGoogleCodeForProfile,
@@ -159,8 +164,7 @@ export async function GET(request: NextRequest) {
       };
     }
 
-    const role: "ADMIN" | "USER" =
-      finalUser.role === "ADMIN" ? "ADMIN" : "USER";
+    const role = normalizeUserRole(finalUser.role);
     const sessionToken = await signSessionToken({
       userId: finalUser.id,
       username: finalUser.username,

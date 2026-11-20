@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { getSession } from "@/lib/auth";
+import { getSession, isAdminRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import Navbar from "@/components/Navbar";
 import SubtitleEditor from "@/components/SubtitleEditor";
@@ -12,7 +12,7 @@ export default async function AdminVideoEditPage({
   params: Promise<{ videoId: string }>;
 }) {
   const session = await getSession();
-  if (!session || session.role !== "ADMIN") {
+  if (!session || !isAdminRole(session.role)) {
     redirect("/");
   }
 
@@ -33,7 +33,11 @@ export default async function AdminVideoEditPage({
 
   return (
     <div className="min-h-screen flex flex-col bg-[#f6f7f5]">
-      <Navbar username={session.username} role={session.role} />
+      <Navbar
+        username={session.username}
+        role={session.role}
+        avatarUrl={session.avatarUrl ?? null}
+      />
 
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 lg:px-8">
         <SubtitleEditor

@@ -12,17 +12,20 @@ import {
   LogOut,
   Settings2,
   ShieldCheck,
-  UserCircle2,
+  Trophy,
 } from "lucide-react";
 import { useToast } from "@/components/ToastProvider";
 import AuthModal from "@/components/AuthModal";
+import UserAvatar from "@/components/UserAvatar";
+import { isAdminRole, isSuperAdminRole, type UserRole } from "@/lib/jwt";
 
 interface NavbarProps {
   username?: string | null;
-  role?: "ADMIN" | "USER" | null;
+  role?: UserRole | null;
+  avatarUrl?: string | null;
 }
 
-export default function Navbar({ username, role }: NavbarProps) {
+export default function Navbar({ username, role, avatarUrl }: NavbarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const toast = useToast();
@@ -71,7 +74,8 @@ export default function Navbar({ username, role }: NavbarProps) {
         pathname.startsWith("/admin") ||
         pathname === "/account" ||
         pathname === "/saved" ||
-        pathname === "/vocab"
+        pathname === "/vocab" ||
+        pathname === "/leaderboard"
       ) {
         router.push("/");
       }
@@ -142,10 +146,21 @@ export default function Navbar({ username, role }: NavbarProps) {
                     <GraduationCap className="h-4 w-4" />
                     <span>Từ vựng</span>
                   </Link>
+                  <Link
+                    href="/leaderboard"
+                    className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm font-medium transition ${
+                      pathname === "/leaderboard"
+                        ? "bg-teal-50 text-teal-800"
+                        : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                    }`}
+                  >
+                    <Trophy className="h-4 w-4" />
+                    <span>Xếp hạng</span>
+                  </Link>
                 </>
               )}
 
-              {role === "ADMIN" && (
+              {isAdminRole(role) && (
                 <Link
                   href="/admin"
                   className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm font-medium transition ${
@@ -161,14 +176,14 @@ export default function Navbar({ username, role }: NavbarProps) {
             </nav>
           </div>
 
-          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+          <div className="flex items-center gap-1 sm:gap-2.5 shrink-0">
             {isLoggedIn ? (
               <>
                 <Link
                   href="/saved"
                   title="Câu hay đã lưu"
                   aria-label="Câu hay đã lưu"
-                  className={`inline-flex md:hidden items-center gap-1 rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition ${
+                  className={`inline-flex md:hidden items-center gap-1 rounded-xl border p-1.5 sm:px-2.5 text-xs font-semibold transition ${
                     pathname === "/saved"
                       ? "border-teal-600 bg-teal-700 text-white"
                       : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
@@ -181,7 +196,7 @@ export default function Navbar({ username, role }: NavbarProps) {
                   href="/vocab"
                   title="Kho từ vựng Flashcard"
                   aria-label="Kho từ vựng Flashcard"
-                  className={`inline-flex md:hidden items-center gap-1 rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition ${
+                  className={`inline-flex md:hidden items-center gap-1 rounded-xl border p-1.5 sm:px-2.5 text-xs font-semibold transition ${
                     pathname === "/vocab"
                       ? "border-teal-600 bg-teal-700 text-white"
                       : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
@@ -190,12 +205,25 @@ export default function Navbar({ username, role }: NavbarProps) {
                   <GraduationCap className="h-4 w-4" />
                 </Link>
 
-                {role === "ADMIN" && (
+                <Link
+                  href="/leaderboard"
+                  title="Bảng xếp hạng nhóm"
+                  aria-label="Bảng xếp hạng nhóm"
+                  className={`inline-flex md:hidden items-center gap-1 rounded-xl border p-1.5 sm:px-2.5 text-xs font-semibold transition ${
+                    pathname === "/leaderboard"
+                      ? "border-teal-600 bg-teal-700 text-white"
+                      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                  }`}
+                >
+                  <Trophy className="h-4 w-4" />
+                </Link>
+
+                {isAdminRole(role) && (
                   <Link
                     href="/admin"
                     title="Quản trị"
                     aria-label="Quản trị"
-                    className={`inline-flex md:hidden items-center gap-1 rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition ${
+                    className={`inline-flex md:hidden items-center gap-1 rounded-xl border p-1.5 sm:px-2.5 text-xs font-semibold transition ${
                       pathname.startsWith("/admin")
                         ? "border-teal-600 bg-teal-700 text-white"
                         : "border-teal-200 bg-teal-50 text-teal-800 hover:bg-teal-100"
@@ -209,19 +237,31 @@ export default function Navbar({ username, role }: NavbarProps) {
                 <Link
                   href="/account"
                   title="Chỉnh sửa thông tin tài khoản"
-                  className={`inline-flex items-center gap-1.5 sm:gap-2 rounded-xl border px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm transition ${
+                  aria-label="Tài khoản"
+                  className={`inline-flex items-center gap-1.5 sm:gap-2 rounded-xl border p-1 sm:px-3 text-xs sm:text-sm transition ${
                     pathname === "/account"
                       ? "border-teal-300 bg-teal-50 text-teal-900"
                       : "border-slate-200 bg-slate-50/80 text-slate-700 hover:border-slate-300 hover:bg-slate-100"
                   }`}
                 >
-                  <UserCircle2 className="h-4 w-4 shrink-0 text-teal-700" />
-                  <span className="max-w-[78px] sm:max-w-[110px] truncate font-medium">
+                  <UserAvatar
+                    src={avatarUrl}
+                    name={username ?? "U"}
+                    sizeClass="h-6 w-6"
+                    textClass="text-[11px]"
+                  />
+                  <span className="hidden sm:inline max-w-[110px] truncate font-medium">
                     {username}
                   </span>
-                  {role === "ADMIN" && (
-                    <span className="hidden sm:inline-block rounded-md bg-teal-700/10 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-teal-800">
-                      ADMIN
+                  {isAdminRole(role) && (
+                    <span
+                      className={`hidden sm:inline-block rounded-md px-1.5 py-0.5 text-[10px] font-bold tracking-wide ${
+                        isSuperAdminRole(role)
+                          ? "bg-amber-100 text-amber-800"
+                          : "bg-teal-700/10 text-teal-800"
+                      }`}
+                    >
+                      {isSuperAdminRole(role) ? "SUPERADMIN" : "ADMIN"}
                     </span>
                   )}
                   <Settings2 className="hidden sm:inline-block h-3.5 w-3.5 text-slate-400" />
@@ -232,7 +272,7 @@ export default function Navbar({ username, role }: NavbarProps) {
                   disabled={loggingOut}
                   title="Đăng xuất"
                   aria-label="Đăng xuất"
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 sm:px-3 py-1.5 text-sm font-medium text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 disabled:opacity-50 cursor-pointer"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white p-1.5 sm:px-3 text-sm font-medium text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 disabled:opacity-50 cursor-pointer"
                 >
                   <LogOut className="h-4 w-4" />
                   <span className="hidden sm:inline">Đăng xuất</span>

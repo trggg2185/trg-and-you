@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
+import { getSession, isAdminRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 interface IncomingSubtitle {
@@ -16,7 +16,7 @@ export async function PUT(
 ) {
   try {
     const session = await getSession();
-    if (!session || session.role !== "ADMIN") {
+    if (!session || !isAdminRole(session.role)) {
       return NextResponse.json(
         { error: "Bạn không có quyền chỉnh sửa phụ đề." },
         { status: 403 }

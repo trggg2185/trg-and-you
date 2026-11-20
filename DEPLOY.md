@@ -157,9 +157,9 @@ Phù hợp nếu bạn muốn web chạy **24/7 trên cloud hoàn toàn miễn p
      *(Dùng `--include=dev` để chắc chắn `prisma`, `tsx`, `typescript` luôn được cài đầy đủ lúc build).*
    - **Start Command:**
      ```bash
-     npx prisma db push && npx prisma db seed && npm run start
+     npx prisma db push --accept-data-loss && npx prisma db seed && npm run start
      ```
-     *(Tự động tạo bảng trên Neon nếu chưa có, tạo sẵn tài khoản Admin và khởi chạy Next.js).*
+     *(Tự động đồng bộ bảng/cột mới trên Neon kể cả khi thêm `@unique` index như `googleId`/`email` trong môi trường non-interactive mà vẫn giữ nguyên dữ liệu cũ, tạo sẵn Admin nếu chưa có và khởi chạy Next.js. Lưu ý: KHÔNG dùng `--force-reset`.)*
 4. Kéo xuống mục **Environment Variables**, bấm **Add Environment Variable** và thêm đầy đủ các biến sau (lấy giá trị từ `.env` của bạn, riêng `DATABASE_URL` dùng chuỗi Neon ở Bước 1):
    - `DATABASE_URL` = `postgresql://...` *(chuỗi Neon ở Bước 1)*
    - `JWT_SECRET` = `<chuỗi bí mật trong .env>`

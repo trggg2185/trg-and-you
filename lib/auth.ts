@@ -3,6 +3,10 @@ import { prisma } from "@/lib/prisma";
 import {
   SESSION_COOKIE_NAME,
   type SessionPayload,
+  type UserRole,
+  isAdminRole,
+  isSuperAdminRole,
+  normalizeUserRole,
   signSessionToken,
   verifySessionToken,
 } from "@/lib/jwt";
@@ -10,6 +14,10 @@ import {
 export {
   SESSION_COOKIE_NAME,
   type SessionPayload,
+  type UserRole,
+  isAdminRole,
+  isSuperAdminRole,
+  normalizeUserRole,
   signSessionToken,
   verifySessionToken,
 };
@@ -22,10 +30,16 @@ export async function getSession(): Promise<SessionPayload | null> {
   const verified = await verifySessionToken(token);
   if (!verified) return null;
 
-  // Enforce ban status and pick up live username/role updates from DB
+  // Enforce ban status and pick up live username/role/avatar updates from DB
   const user = await prisma.user.findUnique({
     where: { id: verified.userId },
-    select: { id: true, username: true, role: true, isBanned: true },
+    select: {
+      id: true,
+      username: true,
+      role: true,
+      avatarUrl: true,
+      isBanned: true,
+    },
   });
 
   if (!user || user.isBanned) {
@@ -35,6 +49,7 @@ export async function getSession(): Promise<SessionPayload | null> {
   return {
     userId: user.id,
     username: user.username,
-    role: user.role === "ADMIN" ? "ADMIN" : "USER",
+    role: normalizeUserRole(user.role),
+    avatarUrl: user.avatarUrl ?? null,
   };
 }

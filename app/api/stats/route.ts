@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
 
     const dateKey = getTodayDateKey();
 
-    await prisma.studyLog.upsert({
+    const log = await prisma.studyLog.upsert({
       where: {
         userId_dateKey: {
           userId: session.userId,
@@ -73,10 +73,14 @@ export async function POST(request: NextRequest) {
           ? { dictationCorrect: { increment: addDictation } }
           : {}),
       },
+      select: {
+        dateKey: true,
+        secondsStudied: true,
+        dictationCorrect: true,
+      },
     });
 
-    const summary = await getStudySummary(session.userId);
-    return NextResponse.json({ summary });
+    return NextResponse.json({ ok: true, log });
   } catch (error) {
     console.error("Update study stats error:", error);
     return NextResponse.json(

@@ -3,6 +3,8 @@ import {
   PutObjectCommand,
   GetObjectCommand,
   DeleteObjectCommand,
+  ListObjectsV2Command,
+  DeleteObjectsCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { createWriteStream } from "fs";
@@ -125,4 +127,68 @@ export async function uploadFileToR2(
   );
 
   return getPublicVideoUrl(r2Key);
+}
+
+export interface R2StoredObject {
+  key: string;
+  size: number;
+  lastModified: string;
+}
+
+/** Lists all objects inside the configured R2 bucket (paginated safely). */
+export async function listR2Objects(prefix?: string): Promise<R2StoredObject[]> {
+  const { bucketName } = getR2Config();
+  const client = createR2Client();
+  const objects: R2StoredObject[] = [];
+  let continuationToken: string | undefined;
+
+  do {
+    const res = await client.send(
+      new ListObjectsV2Command({
+        Bucket: bucketName,
+        ...(prefix ? { Prefix: prefix } : {}),
+        ContinuationToken: continuationToken,
+        MaxKeys: 1000,
+      })
+    );
+
+    for (const item of res.Contents ?? []) {
+      if (!item.Key) continue;
+      objects.push({
+        key: item.Key,
+        size: item.Size ?? 0,
+        lastModified: (item.LastModified ?? new Date()).toISOString(),
+      });
+    }
+
+    continuationToken = res.IsTruncated ? res.NextContinuationToken : undefined;
+  } while (continuationToken);
+
+  return objects;
+}
+
+/** Deletes multiple object keys from R2 cleanly. */
+export async function deleteR2Objects(keys: string[]): Promise<number> {
+  const uniqueKeys = Array.from(new Set(keys.filter(Boolean)));
+  if (uniqueKeys.length === 0) return 0;
+
+  const { bucketName } = getR2Config();
+  const client = createR2Client();
+  let deleted = 0;
+
+  for (let i = 0; i < uniqueKeys.length; i += 1000) {
+    const batch = uniqueKeys.slice(i, i + 1000);
+    await client.send(
+      new DeleteObjectsCommand({
+        Bucket: bucketName,
+        Delete: {
+          Objects: batch.map((Key) => ({ Key })),
+          Quiet: true,
+        },
+      })
+    );
+    deleted += batch.length;
+  }
+
+  return deleted;
 }

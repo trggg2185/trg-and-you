@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
+import { getSession, isAdminRole } from "@/lib/auth";
 import { createPresignedUploadUrl } from "@/lib/r2";
 
 const ALLOWED_EXTENSIONS = new Set([".mp4", ".mkv", ".webm"]);
@@ -7,7 +7,7 @@ const ALLOWED_EXTENSIONS = new Set([".mp4", ".mkv", ".webm"]);
 export async function POST(request: NextRequest) {
   try {
     const session = await getSession();
-    if (!session || session.role !== "ADMIN") {
+    if (!session || !isAdminRole(session.role)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

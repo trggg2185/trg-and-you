@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
+import { getSession, isAdminRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { deleteR2Object } from "@/lib/r2";
 import { normalizeLevel, normalizeTagsInput } from "@/lib/lessonMeta";
@@ -21,7 +21,7 @@ export async function GET(
       },
     });
 
-    if (!video || (video.status !== "READY" && session?.role !== "ADMIN")) {
+    if (!video || (video.status !== "READY" && !isAdminRole(session?.role))) {
       return NextResponse.json(
         { error: "Không tìm thấy video." },
         { status: 404 }
@@ -58,7 +58,7 @@ export async function PATCH(
 ) {
   try {
     const session = await getSession();
-    if (!session || session.role !== "ADMIN") {
+    if (!session || !isAdminRole(session.role)) {
       return NextResponse.json(
         { error: "Bạn không có quyền thực hiện thao tác này." },
         { status: 403 }
@@ -119,7 +119,7 @@ export async function DELETE(
 ) {
   try {
     const session = await getSession();
-    if (!session || session.role !== "ADMIN") {
+    if (!session || !isAdminRole(session.role)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

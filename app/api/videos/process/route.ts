@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import os from "os";
 import path from "path";
 import fs from "fs/promises";
-import { getSession } from "@/lib/auth";
+import { getSession, isAdminRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { downloadR2ObjectToFile, getPublicVideoUrl } from "@/lib/r2";
 import { extractAudioToMp3 } from "@/lib/ffmpeg";
@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const session = await getSession();
-    if (!session || session.role !== "ADMIN") {
+    if (!session || !isAdminRole(session.role)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

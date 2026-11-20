@@ -13,8 +13,9 @@ model User {
   passwordHash   String?
   googleId       String?            @unique
   email          String?            @unique
-  avatarUrl      String?
-  role           String             @default("USER") // "ADMIN" or "USER"
+  avatarUrl        String?
+  dailyGoalMinutes Int                @default(15)
+  role             String             @default("USER") // "SUPERADMIN", "ADMIN", or "USER"
   isBanned       Boolean            @default(false)
   createdAt      DateTime           @default(now())
   notes          Note[]
@@ -132,16 +133,21 @@ model StudyLog {
 }
 
 model SharedNote {
-  id           String   @id @default(cuid())
+  id           String       @id @default(cuid())
   userId       String
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   videoId      String
-  video        Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  video        Video        @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  kind         String       @default("NOTE") // "NOTE" or "COMMENT"
+  parentId     String?
+  parent       SharedNote?  @relation("SharedNoteReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies      SharedNote[] @relation("SharedNoteReplies")
   timestampSec Float?
   content      String
-  createdAt    DateTime @default(now())
+  createdAt    DateTime     @default(now())
 
   @@index([videoId, createdAt])
+  @@index([parentId])
 }
 
 model WordEntry {

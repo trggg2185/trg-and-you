@@ -1,42 +1,66 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
+import { getSession, isAdminRole, isSuperAdminRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+
+function serializeNote(n: {
+  id: string;
+  kind: string;
+  parentId: string | null;
+  timestampSec: number | null;
+  content: string;
+  createdAt: Date;
+  user: { id: string; username: string; avatarUrl: string | null; role: string };
+}) {
+  return {
+    id: n.id,
+    userId: n.user.id,
+    username: n.user.username,
+    avatarUrl: n.user.avatarUrl,
+    authorRole: n.user.role,
+    kind: n.kind === "COMMENT" ? "COMMENT" : "NOTE",
+    parentId: n.parentId,
+    timestampSec: n.timestampSec,
+    content: n.content,
+    createdAt: n.createdAt.toISOString(),
+  };
+}
 
 export async function GET(request: NextRequest) {
   try {
     const videoId = request.nextUrl.searchParams.get("videoId")?.trim() || "";
     if (!videoId) {
-      return NextResponse.json(
-        { error: "Thiếu videoId." },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Thiếu videoId." }, { status: 400 });
     }
 
-    const notes = await prisma.sharedNote.findMany({
-      where: { videoId },
+    const topNotes = await prisma.sharedNote.findMany({
+      where: { videoId, parentId: null },
       orderBy: { createdAt: "desc" },
       take: 100,
       include: {
         user: {
-          select: { id: true, username: true },
+          select: { id: true, username: true, avatarUrl: true, role: true },
+        },
+        replies: {
+          orderBy: { createdAt: "asc" },
+          include: {
+            user: {
+              select: { id: true, username: true, avatarUrl: true, role: true },
+            },
+          },
         },
       },
     });
 
     return NextResponse.json({
-      notes: notes.map((n) => ({
-        id: n.id,
-        userId: n.user.id,
-        username: n.user.username,
-        timestampSec: n.timestampSec,
-        content: n.content,
-        createdAt: n.createdAt.toISOString(),
+      notes: topNotes.map((n) => ({
+        ...serializeNote(n),
+        replies: n.replies.map(serializeNote),
       })),
     });
   } catch (error) {
     console.error("List shared notes error:", error);
     return NextResponse.json(
-      { error: "Không thể tải ghi chú nhóm." },
+      { error: "Không thể tải ghi chú & bình luận." },
       { status: 500 }
     );
   }
@@ -47,7 +71,7 @@ export async function POST(request: NextRequest) {
     const session = await getSession();
     if (!session) {
       return NextResponse.json(
-        { error: "Vui lòng đăng nhập để đăng ghi chú nhóm." },
+        { error: "Vui lòng đăng nhập để đăng ghi chú hoặc bình luận." },
         { status: 401 }
       );
     }
@@ -57,6 +81,11 @@ export async function POST(request: NextRequest) {
       typeof body.videoId === "string" ? body.videoId.trim() : "";
     const content =
       typeof body.content === "string" ? body.content.trim().slice(0, 600) : "";
+    const kind = body.kind === "COMMENT" ? "COMMENT" : "NOTE";
+    const parentId =
+      typeof body.parentId === "string" && body.parentId.trim()
+        ? body.parentId.trim()
+        : null;
     const timestampSec =
       typeof body.timestampSec === "number" && Number.isFinite(body.timestampSec)
         ? Math.max(0, body.timestampSec)
@@ -64,21 +93,42 @@ export async function POST(request: NextRequest) {
 
     if (!videoId || !content) {
       return NextResponse.json(
-        { error: "Nội dung ghi chú không được để trống." },
+        { error: "Nội dung không được để trống." },
         { status: 400 }
       );
+    }
+
+    if (parentId) {
+      const parent = await prisma.sharedNote.findUnique({
+        where: { id: parentId },
+        select: { id: true, videoId: true, parentId: true },
+      });
+      if (!parent || parent.videoId !== videoId) {
+        return NextResponse.json(
+          { error: "Không tìm thấy bài viết gốc để trả lời." },
+          { status: 404 }
+        );
+      }
+      if (parent.parentId) {
+        return NextResponse.json(
+          { error: "Chỉ hỗ trợ trả lời trực tiếp 1 cấp." },
+          { status: 400 }
+        );
+      }
     }
 
     const created = await prisma.sharedNote.create({
       data: {
         userId: session.userId,
         videoId,
-        timestampSec,
+        kind: parentId ? "COMMENT" : kind,
+        parentId,
+        timestampSec: parentId ? null : timestampSec,
         content,
       },
       include: {
         user: {
-          select: { id: true, username: true },
+          select: { id: true, username: true, avatarUrl: true, role: true },
         },
       },
     });
@@ -86,12 +136,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         note: {
-          id: created.id,
-          userId: created.user.id,
-          username: created.user.username,
-          timestampSec: created.timestampSec,
-          content: created.content,
-          createdAt: created.createdAt.toISOString(),
+          ...serializeNote(created),
+          replies: [],
         },
       },
       { status: 201 }
@@ -99,7 +145,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Create shared note error:", error);
     return NextResponse.json(
-      { error: "Không thể đăng ghi chú nhóm." },
+      { error: "Không thể đăng nội dung lúc này." },
       { status: 500 }
     );
   }
@@ -120,17 +166,25 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "Thiếu id." }, { status: 400 });
     }
 
-    const existing = await prisma.sharedNote.findUnique({ where: { id } });
+    const existing = await prisma.sharedNote.findUnique({
+      where: { id },
+      include: { user: { select: { role: true } } },
+    });
     if (!existing) {
       return NextResponse.json(
-        { error: "Không tìm thấy ghi chú." },
+        { error: "Không tìm thấy nội dung." },
         { status: 404 }
       );
     }
 
-    if (existing.userId !== session.userId && session.role !== "ADMIN") {
+    const isOwner = existing.userId === session.userId;
+    const isSuper = isSuperAdminRole(session.role);
+    const isAdminModeratingUser =
+      isAdminRole(session.role) && existing.user.role === "USER";
+
+    if (!isOwner && !isSuper && !isAdminModeratingUser) {
       return NextResponse.json(
-        { error: "Bạn không có quyền xóa ghi chú này." },
+        { error: "Bạn không có quyền xóa nội dung của quản trị viên này." },
         { status: 403 }
       );
     }
@@ -140,7 +194,7 @@ export async function DELETE(request: NextRequest) {
   } catch (error) {
     console.error("Delete shared note error:", error);
     return NextResponse.json(
-      { error: "Không thể xóa ghi chú nhóm." },
+      { error: "Không thể xóa nội dung." },
       { status: 500 }
     );
   }

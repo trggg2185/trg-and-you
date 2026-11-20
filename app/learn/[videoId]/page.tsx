@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { getSession } from "@/lib/auth";
+import { getSession, isAdminRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import Navbar from "@/components/Navbar";
 import ShadowingStudio from "@/components/ShadowingStudio";
@@ -36,7 +36,7 @@ export default async function LearnVideoPage({
     notFound();
   }
 
-  if (video.status !== "READY" && session?.role !== "ADMIN") {
+  if (video.status !== "READY" && !isAdminRole(session?.role)) {
     redirect("/");
   }
 
@@ -74,6 +74,7 @@ export default async function LearnVideoPage({
       <Navbar
         username={session?.username ?? null}
         role={session?.role ?? null}
+        avatarUrl={session?.avatarUrl ?? null}
       />
 
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-5 sm:px-6 lg:px-8">
@@ -101,7 +102,8 @@ export default async function LearnVideoPage({
           startAtTime={startAtTime}
           isLoggedIn={Boolean(session)}
           currentUserId={session?.userId ?? null}
-          isAdmin={session?.role === "ADMIN"}
+          isAdmin={isAdminRole(session?.role)}
+          currentUserRole={session?.role ?? null}
         />
       </main>
     </div>

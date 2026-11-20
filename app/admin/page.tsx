@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { getSession } from "@/lib/auth";
+import { getSession, isAdminRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import Navbar from "@/components/Navbar";
 import AdminDashboard from "@/components/AdminDashboard";
@@ -10,10 +10,7 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminPage() {
   const session = await getSession();
-  if (!session) {
-    redirect("/");
-  }
-  if (session.role !== "ADMIN") {
+  if (!session || !isAdminRole(session.role)) {
     redirect("/");
   }
 
@@ -32,13 +29,20 @@ export default async function AdminPage() {
         id: true,
         username: true,
         email: true,
+        avatarUrl: true,
         googleId: true,
         passwordHash: true,
         role: true,
         isBanned: true,
         createdAt: true,
         _count: {
-          select: { notes: true },
+          select: {
+            notes: true,
+            sharedNotes: true,
+            progresses: true,
+            vocabItems: true,
+            savedSentences: true,
+          },
         },
       },
     }),
@@ -53,6 +57,7 @@ export default async function AdminPage() {
     id: u.id,
     username: u.username,
     email: u.email,
+    avatarUrl: u.avatarUrl,
     hasGoogle: Boolean(u.googleId),
     hasPassword: Boolean(u.passwordHash),
     role: u.role,
@@ -63,7 +68,11 @@ export default async function AdminPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#f6f7f5]">
-      <Navbar username={session.username} role={session.role} />
+      <Navbar
+        username={session.username}
+        role={session.role}
+        avatarUrl={session.avatarUrl ?? null}
+      />
 
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-6">
@@ -86,6 +95,7 @@ export default async function AdminPage() {
           initialVideos={serializedVideos}
           initialUsers={serializedUsers}
           currentAdminId={session.userId}
+          currentRole={session.role}
         />
       </main>
     </div>

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
+import { getSession, isAdminRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(request: NextRequest) {
@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
 
     const includeAll =
       request.nextUrl.searchParams.get("all") === "1" &&
-      session?.role === "ADMIN";
+      isAdminRole(session?.role);
 
     const videos = await prisma.video.findMany({
       where: includeAll ? undefined : { status: "READY" },
